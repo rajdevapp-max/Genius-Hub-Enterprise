@@ -1,0 +1,334 @@
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;800;900&family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 220 20% 97%;
+    --foreground: 220 30% 10%;
+    --card: 0 0% 100%;
+    --card-foreground: 220 30% 10%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 220 30% 10%;
+    --primary: 220 100% 60%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 220 15% 92%;
+    --secondary-foreground: 220 20% 30%;
+    --muted: 220 15% 92%;
+    --muted-foreground: 220 10% 50%;
+    --accent: 180 80% 45%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 220 15% 88%;
+    --input: 220 15% 88%;
+    --ring: 220 100% 60%;
+    --radius: 0.75rem;
+    --success: 152 69% 41%;
+    --warning: 38 92% 50%;
+    --info: 210 100% 56%;
+    --neon-blue: 210 100% 60%;
+    --neon-cyan: 180 100% 50%;
+    --neon-purple: 270 100% 65%;
+    --neon-pink: 320 100% 60%;
+    --chart-1: 220 100% 60%;
+    --chart-2: 180 80% 45%;
+    --chart-3: 38 92% 50%;
+    --chart-4: 320 72% 55%;
+    --chart-5: 270 100% 65%;
+    --sidebar-background: 220 25% 98%;
+    --sidebar-foreground: 220 20% 25%;
+    --sidebar-primary: 220 100% 60%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 220 100% 96%;
+    --sidebar-accent-foreground: 220 100% 50%;
+    --sidebar-border: 220 15% 90%;
+    --sidebar-ring: 220 100% 60%;
+  }
+
+  .dark {
+    --background: 225 35% 4%;
+    --foreground: 210 20% 92%;
+    --card: 225 30% 7%;
+    --card-foreground: 210 20% 92%;
+    --popover: 225 30% 6%;
+    --popover-foreground: 210 20% 92%;
+    --primary: 210 100% 60%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 225 25% 11%;
+    --secondary-foreground: 210 20% 80%;
+    --muted: 225 25% 10%;
+    --muted-foreground: 220 12% 48%;
+    --accent: 180 100% 50%;
+    --accent-foreground: 0 0% 0%;
+    --destructive: 0 72% 55%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 225 20% 12%;
+    --input: 225 20% 12%;
+    --ring: 210 100% 60%;
+    --success: 152 69% 46%;
+    --warning: 38 92% 55%;
+    --info: 210 100% 60%;
+    --neon-blue: 210 100% 65%;
+    --neon-cyan: 180 100% 55%;
+    --neon-purple: 270 100% 70%;
+    --neon-pink: 320 100% 65%;
+    --chart-1: 210 100% 65%;
+    --chart-2: 180 100% 50%;
+    --chart-3: 38 92% 55%;
+    --chart-4: 320 72% 60%;
+    --chart-5: 270 100% 70%;
+    --sidebar-background: 225 32% 5%;
+    --sidebar-foreground: 210 20% 80%;
+    --sidebar-primary: 210 100% 60%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 210 100% 8%;
+    --sidebar-accent-foreground: 210 100% 70%;
+    --sidebar-border: 225 20% 10%;
+    --sidebar-ring: 210 100% 60%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-family: 'Space Grotesk', system-ui, sans-serif;
+  }
+  ::-webkit-scrollbar { width: 4px; height: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: hsl(var(--border)); border-radius: 10px; }
+  ::-webkit-scrollbar-thumb:hover { background: hsl(var(--primary) / 0.5); }
+}
+
+@layer components {
+  /* ── Holographic Glass Panel ── */
+  .glass-panel {
+    @apply rounded-2xl border;
+    background: hsl(var(--card));
+    border-color: hsl(var(--border));
+    box-shadow: 0 1px 3px hsl(var(--foreground) / 0.04);
+  }
+  .dark .glass-panel {
+    background: hsl(var(--card) / 0.5);
+    backdrop-filter: blur(24px) saturate(1.4);
+    border-color: hsl(var(--neon-blue) / 0.08);
+    box-shadow:
+      0 0 30px hsl(var(--neon-blue) / 0.03),
+      inset 0 1px 0 hsl(var(--neon-blue) / 0.05),
+      0 8px 32px hsl(var(--background) / 0.6);
+  }
+
+  .glass-panel-hover {
+    @apply glass-panel transition-all duration-500;
+  }
+  .glass-panel-hover:hover {
+    border-color: hsl(var(--primary) / 0.3);
+    transform: translateY(-3px);
+    box-shadow: 0 12px 40px hsl(var(--primary) / 0.08);
+  }
+  .dark .glass-panel-hover:hover {
+    border-color: hsl(var(--neon-cyan) / 0.25);
+    box-shadow:
+      0 0 40px hsl(var(--neon-cyan) / 0.06),
+      0 0 80px hsl(var(--neon-blue) / 0.03),
+      0 20px 60px hsl(var(--background) / 0.5),
+      inset 0 1px 0 hsl(var(--neon-cyan) / 0.1);
+  }
+
+  /* ── Gradient Texts ── */
+  .gradient-text {
+    background: linear-gradient(135deg, hsl(var(--neon-blue)), hsl(var(--neon-cyan)), hsl(var(--neon-purple)));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    color: transparent;
+  }
+  .gradient-text-accent {
+    background: linear-gradient(135deg, hsl(var(--neon-cyan)), hsl(var(--neon-blue)));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    color: transparent;
+  }
+
+  /* ── Neon Border ── */
+  .neon-border {
+    border: 1.5px solid hsl(var(--neon-cyan) / 0.5);
+    box-shadow:
+      0 0 20px hsl(var(--neon-cyan) / 0.1),
+      0 0 60px hsl(var(--neon-blue) / 0.05),
+      inset 0 0 20px hsl(var(--neon-cyan) / 0.03);
+  }
+
+  /* ── Holographic Shimmer ── */
+  .holo-shimmer {
+    position: relative;
+    overflow: hidden;
+  }
+  .holo-shimmer::before {
+    content: '';
+    position: absolute;
+    top: 0; left: -100%; right: 0; bottom: 0;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      hsl(var(--neon-cyan) / 0.06),
+      hsl(var(--neon-blue) / 0.08),
+      hsl(var(--neon-purple) / 0.06),
+      transparent
+    );
+    animation: holo-sweep 4s linear infinite;
+  }
+  @keyframes holo-sweep {
+    0% { left: -100%; }
+    100% { left: 200%; }
+  }
+
+  /* ── Buttons ── */
+  .btn-primary-glow {
+    @apply px-5 py-2.5 rounded-xl font-semibold text-sm transition-all duration-300 inline-flex items-center justify-center gap-2;
+    background: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--neon-purple)));
+    color: hsl(var(--primary-foreground));
+    box-shadow: 0 4px 20px hsl(var(--primary) / 0.3);
+  }
+  .btn-primary-glow:hover {
+    box-shadow: 0 8px 40px hsl(var(--primary) / 0.4), 0 0 20px hsl(var(--neon-cyan) / 0.15);
+    transform: translateY(-1px);
+  }
+  .btn-primary-glow:disabled {
+    opacity: 0.4;
+    pointer-events: none;
+  }
+  .btn-ghost-glow {
+    @apply px-5 py-2.5 rounded-xl font-semibold text-sm transition-all duration-300 inline-flex items-center justify-center gap-2;
+    color: hsl(var(--primary));
+    border: 1.5px solid hsl(var(--primary) / 0.2);
+    background: transparent;
+  }
+  .btn-ghost-glow:hover {
+    background: hsl(var(--primary) / 0.06);
+    border-color: hsl(var(--neon-cyan) / 0.4);
+    box-shadow: 0 0 20px hsl(var(--neon-cyan) / 0.08);
+  }
+
+  /* ── Input ── */
+  .input-glass {
+    @apply w-full rounded-xl border px-4 py-3 text-sm transition-all duration-300 outline-none;
+    background: hsl(var(--card));
+    border-color: hsl(var(--border));
+    color: hsl(var(--foreground));
+  }
+  .input-glass::placeholder { color: hsl(var(--muted-foreground)); }
+  .input-glass:focus {
+    border-color: hsl(var(--neon-cyan) / 0.5);
+    box-shadow: 0 0 0 3px hsl(var(--neon-cyan) / 0.08), 0 0 20px hsl(var(--neon-cyan) / 0.05);
+  }
+  .dark .input-glass {
+    background: hsl(var(--card) / 0.4);
+    backdrop-filter: blur(12px);
+  }
+
+  /* ── Skill Tags ── */
+  .skill-tag {
+    @apply inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-medium;
+    background: hsl(var(--primary) / 0.08);
+    color: hsl(var(--primary));
+    border: 1px solid hsl(var(--primary) / 0.12);
+  }
+  .skill-tag-matched {
+    @apply inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-medium;
+    background: hsl(var(--success) / 0.08);
+    color: hsl(var(--success));
+    border: 1px solid hsl(var(--success) / 0.15);
+  }
+  .skill-tag-missing {
+    @apply inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-medium line-through opacity-60;
+    background: hsl(var(--destructive) / 0.06);
+    color: hsl(var(--destructive));
+    border: 1px solid hsl(var(--destructive) / 0.1);
+  }
+
+  /* ── Stat Card ── */
+  .stat-card {
+    @apply glass-panel p-5 relative overflow-hidden;
+  }
+  .stat-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, hsl(var(--neon-blue)), hsl(var(--neon-cyan)), hsl(var(--neon-purple)));
+  }
+
+  /* ── Glow Ring ── */
+  .glow-ring {
+    position: relative;
+  }
+  .glow-ring::after {
+    content: '';
+    position: absolute;
+    inset: -4px;
+    border-radius: inherit;
+    background: conic-gradient(from 0deg, hsl(var(--neon-blue) / 0.3), hsl(var(--neon-cyan) / 0.4), hsl(var(--neon-purple) / 0.3), hsl(var(--neon-blue) / 0.3));
+    z-index: -1;
+    filter: blur(12px);
+    opacity: 0;
+    transition: opacity 0.5s ease;
+  }
+  .glow-ring:hover::after {
+    opacity: 1;
+  }
+
+  /* ── Rank Badges ── */
+  .rank-gold {
+    background: linear-gradient(135deg, hsl(38 92% 50% / 0.2), hsl(38 92% 50% / 0.05));
+    border: 1px solid hsl(38 92% 50% / 0.4);
+    color: hsl(38 92% 50%);
+    box-shadow: 0 0 12px hsl(38 92% 50% / 0.15);
+  }
+  .rank-silver {
+    background: linear-gradient(135deg, hsl(220 12% 60% / 0.15), hsl(220 12% 60% / 0.05));
+    border: 1px solid hsl(220 12% 60% / 0.3);
+    color: hsl(220 12% 55%);
+  }
+  .rank-bronze {
+    background: linear-gradient(135deg, hsl(25 70% 50% / 0.15), hsl(25 70% 50% / 0.05));
+    border: 1px solid hsl(25 70% 50% / 0.3);
+    color: hsl(25 70% 45%);
+  }
+
+  /* ── Scan Line Effect (dark only) ── */
+  .dark .scan-line::after {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, hsl(var(--neon-cyan) / 0.4), transparent);
+    animation: scan 3s linear infinite;
+    pointer-events: none;
+  }
+  @keyframes scan {
+    0% { top: 0; }
+    100% { top: 100%; }
+  }
+
+  /* ── Pulse Dot ── */
+  .pulse-dot {
+    @apply relative;
+  }
+  .pulse-dot::before {
+    content: '';
+    @apply absolute inset-0 rounded-full;
+    background: inherit;
+    animation: pulse-ring 2s ease-out infinite;
+  }
+  @keyframes pulse-ring {
+    0% { transform: scale(1); opacity: 0.6; }
+    100% { transform: scale(2.5); opacity: 0; }
+  }
+}

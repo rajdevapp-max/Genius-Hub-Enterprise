@@ -1,0 +1,11 @@
+backend/venv/
+backend/__pycache__/
+node_modules/
+.env
+resumes.zip
+upload_to_hf.py
+zip_and_upload.py
+sync.py
+backend/resumes/
+backend/resumes.db
+backend/faiss_index/
