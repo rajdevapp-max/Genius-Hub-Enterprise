@@ -32,28 +32,25 @@ from huggingface_hub import hf_hub_download
 
 # --- CLOUD SYNC: FETCH 30K+ RESUMES ON STARTUP ---
 def sync_cloud_resumes():
-    print("☁️ Fetching Master Zip from Cloud Locker...")
+    token = os.environ.get("HF_TOKEN")
+    print("☁️ Syncing Cloud Database & Files...")
     try:
-        # Download the zip file from your private dataset
-        zip_path = hf_hub_download(
-            repo_id="Vinu019/company-resumes",
-            filename="resumes.zip",
-            repo_type="dataset",
-            token=os.environ.get("HF_TOKEN") # <-- PASTE YOUR 'hf_...' TOKEN HERE
-        )
+        # 1. Download the Database (The pre-processed brain)
+        db_path = hf_hub_download(repo_id="Vinu019/company-resumes", filename="resumes.db", repo_type="dataset", token=token)
+        shutil.copy(db_path, "resumes.db")
         
-        # Unzip it directly into the engine's memory
-        print("📦 Extracting 30k+ resumes...")
-        os.makedirs("resumes", exist_ok=True)
+        # 2. Download the FAISS Index (The search brain)
+        index_path = hf_hub_download(repo_id="Vinu019/company-resumes", filename="faiss_index.bin", repo_type="dataset", token=token)
+        shutil.copy(index_path, "faiss_index.bin")
+
+        # 3. Download the Resumes Zip
+        zip_path = hf_hub_download(repo_id="Vinu019/company-resumes", filename="resumes.zip", repo_type="dataset", token=token)
         with zipfile.ZipFile(zip_path, 'r') as zip_ref:
             zip_ref.extractall("resumes")
             
-        print("✅ Cloud Sync Complete! Engine is fully loaded.")
+        print("✅ System fully restored from Cloud Backup!")
     except Exception as e:
-        print(f"⚠️ Cloud Sync skipped or failed: {e}")
-
-# Run this instantly when the server wakes up
-sync_cloud_resumes()
+        print(f"⚠️ Cloud Sync failed: {e}")
 # -------------------------------------------------
 
 
