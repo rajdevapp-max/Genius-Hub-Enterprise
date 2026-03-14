@@ -1,0 +1,12 @@
+name: Wake-Up Bot
+on:
+  schedule:
+    - cron: '*/15 * * * *' # Pings every 15 minutes
+  workflow_dispatch:      # Allows manual wake-up
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Keep AI Engine Awake
+        run: curl -I https://vinu019-resume-backend.hf.space
