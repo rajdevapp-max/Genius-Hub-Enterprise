@@ -1,10 +1,45 @@
 import os
+import zipfile
+import shutil
+from huggingface_hub import hf_hub_download
+
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 os.environ["OMP_NUM_THREADS"] = "1"
 
 from dotenv import load_dotenv
 load_dotenv()
 
+# --- 1. CLOUD SYNC MUST RUN FIRST ---
+def sync_cloud_resumes():
+    token = os.environ.get("HF_TOKEN")
+    if not token:
+        print("⚠️ No HF_TOKEN found! Skipping cloud sync.", flush=True)
+        return
+        
+    print("☁️ Syncing Cloud Database & Search Index...", flush=True)
+    try:
+        # Download DB
+        db_path = hf_hub_download(repo_id="Vinu019/company-resumes", filename="resumes.db", repo_type="dataset", token=token)
+        shutil.copy(db_path, "resumes.db")
+        
+        # Download FAISS
+        index_path = hf_hub_download(repo_id="Vinu019/company-resumes", filename="faiss_index.bin", repo_type="dataset", token=token)
+        shutil.copy(index_path, "faiss_index.bin")
+
+        # Download Resumes
+        zip_path = hf_hub_download(repo_id="Vinu019/company-resumes", filename="resumes.zip", repo_type="dataset", token=token)
+        with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+            zip_ref.extractall("resumes")
+            
+        print("✅ SYSTEM FULLY RESTORED FROM CLOUD! 30K+ RESUMES READY.", flush=True)
+    except Exception as e:
+        print(f"⚠️ Cloud Sync failed: {e}", flush=True)
+
+# FORCE THE DOWNLOAD BEFORE ANYTHING ELSE
+sync_cloud_resumes()
+# ------------------------------------
+
+# --- 2. NOW WE IMPORT THE AI MODULES SO THEY SEE THE NEW FILES ---
 import json
 import time
 import re
@@ -21,61 +56,14 @@ from sqlalchemy import or_
 from database import init_db, SessionLocal, Resume
 from embedder import resume_index
 from extractor import process_resume, batch_process
-# --- THE FIX: Added Universal Extraction Imports ---
 from classifier import classify_resume, extract_skills_regex, extract_all_skills, extract_education
 from watcher import start_watcher_thread, get_watcher_stats
 from dedup import find_duplicates, remove_duplicates, scan_folder_duplicates
-
-import os
-import zipfile
-from huggingface_hub import hf_hub_download
-
-# --- CLOUD SYNC: FETCH 30K+ RESUMES ON STARTUP ---
-def sync_cloud_resumes():
-    token = os.environ.get("HF_TOKEN")
-    print("☁️ Syncing Cloud Database & Search Index...")
-    try:
-        # 1. Download the Database (The processed data)
-        db_path = hf_hub_download(
-            repo_id="Vinu019/company-resumes", 
-            filename="resumes.db", 
-            repo_type="dataset", 
-            token=token
-        )
-        import shutil
-        shutil.copy(db_path, "resumes.db")
-        
-        # 2. Download the FAISS Index (The search vectors)
-        index_path = hf_hub_download(
-            repo_id="Vinu019/company-resumes", 
-            filename="faiss_index.bin", 
-            repo_type="dataset", 
-            token=token
-        )
-        shutil.copy(index_path, "faiss_index.bin")
-
-        # 3. Download the actual PDF files
-        zip_path = hf_hub_download(
-            repo_id="Vinu019/company-resumes", 
-            filename="resumes.zip", 
-            repo_type="dataset", 
-            token=token
-        )
-        with zipfile.ZipFile(zip_path, 'r') as zip_ref:
-            zip_ref.extractall("resumes")
-            
-        print("✅ SYSTEM FULLY RESTORED FROM CLOUD! 30K+ RESUMES READY.")
-    except Exception as e:
-        print(f"⚠️ Cloud Sync failed: {e}")
-# -------------------------------------------------
-
-
 
 init_db()
 start_watcher_thread()
 
 app = FastAPI(title="Resume AI Intelligence Platform", version="30.0")
-
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
