@@ -489,7 +489,33 @@ def get_stats():
         total = len(resumes)
         if total == 0: return {"total_resumes": 0, "avg_experience": 0, "avg_score": 0, "top_skills": [], "experience_distribution": [], "location_distribution": [], "education_distribution": [], "score_distribution": [], "processing_status": get_watcher_stats(), "certificates_count": 0, "resumes_with_images": 0, "avg_word_count": 0, "avg_page_count": 0, "skill_categories": []}
         
-        avg_exp = sum(r.experience_years for r in resumes) / total
+        # --- THE FIX: Ignore crazy outliers for the average ---
+        valid_exps = [r.experience_years for r in resumes if r.experience_years is not None and r.experience_years <= 50]
+        avg_exp = sum(valid_exps) / len(valid_exps) if valid_exps else 0
+        
+        avg_score = sum(r.score for r in resumes) / total
+        avg_words = sum(r.word_count for r in resumes) / total
+        avg_pages = sum(r.page_count for r in resumes) / total
+        resumes_with_images = sum(1 for r in resumes if r.has_image)
+        fraud_count = sum(1 for r in resumes if getattr(r, "fraud_flag", 0) == 1)
+        avg_impact = sum(getattr(r, "impact_score", 0.0) for r in resumes) / total
+        total_certs = sum(len(json.loads(r.certificates) if r.certificates else []) for r in resumes)
+        
+        skill_count = {}
+        for r in resumes:
+            for s in (json.loads(r.skills) if r.skills else []): skill_count[s] = skill_count.get(s, 0) + 1
+        top_skills = sorted(skill_count.items(), key=lambda x: -x[1])[:30]
+        
+        # --- THE FIX: Ignore crazy outliers for the graph ---
+        exp_ranges = {"0-2y": 0, "2-5y": 0, "5-8y": 0, "8-12y": 0, "12+y": 0}
+        for r in resumes:
+            y = r.experience_years or 0
+            if y > 50: continue # Skip the outliers
+            if y <= 2: exp_ranges["0-2y"] += 1
+            elif y <= 5: exp_ranges["2-5y"] += 1
+            elif y <= 8: exp_ranges["5-8y"] += 1
+            elif y <= 12: exp_ranges["8-12y"] += 1
+            else: exp_ranges["12+y"] += 1
         avg_score = sum(r.score for r in resumes) / total
         avg_words = sum(r.word_count for r in resumes) / total
         avg_pages = sum(r.page_count for r in resumes) / total
