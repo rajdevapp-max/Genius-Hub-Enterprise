@@ -1,13 +1,14 @@
 """
 parser.py — Enhanced Resume Parser v12.0
 Extracts text, hyperlinks, images, fonts, certificates.
-Features: Anti-Cheat Detection, Deep XML Salvage, Legacy .doc Binary Ripper, and Auto-Kill Switch.
+Features: Anti-Cheat Detection, Deep XML Salvage, Legacy .doc Binary Ripper, Broken PDF Salvage, and Auto-Kill Switch.
 """
 import os
 import re
 import hashlib
 import zipfile
 import fitz  # PyMuPDF
+import pdfplumber
 from docx import Document
 from PIL import Image
 import io
@@ -28,6 +29,7 @@ def file_hash(file_path: str) -> str:
 def extract_text_from_pdf(file_path: str) -> dict:
     result = {"text": "", "hyperlinks": [], "fonts": {}, "has_image": False, "page_count": 0, "fraud_flag": 0, "fraud_reason": ""}
     try:
+        # 1. Primary Engine: PyMuPDF (Super Fast, detects fonts & invisible text)
         doc = fitz.open(file_path)
         result["page_count"] = len(doc)
         all_text = []
@@ -85,8 +87,40 @@ def extract_text_from_pdf(file_path: str) -> dict:
         for fname, fdata in result["fonts"].items():
             serialized_fonts[fname] = {"sizes": sorted(list(fdata["sizes"])), "count": fdata["count"]}
         result["fonts"] = serialized_fonts
+
     except Exception as e:
-        print(f"[parser] PDF error {file_path}: {e}")
+        # --- THE NEW FIX: BROKEN PDF SALVAGE OPERATION ---
+        print(f"\n[parser] Broken PDF detected ({os.path.basename(file_path)}). Initiating Salvage...")
+        try:
+            # Fallback 1: Try pdfplumber (Better at handling corrupted headers)
+            with pdfplumber.open(file_path) as pdf:
+                result["page_count"] = len(pdf.pages)
+                extracted_text = []
+                for i, page in enumerate(pdf.pages):
+                    if i >= 10: break 
+                    text = page.extract_text()
+                    if text: extracted_text.append(text)
+                result["text"] = "\n".join(extracted_text)
+            
+            if result["text"].strip():
+                print(f"[parser] ✓ PDF Salvage successful! Recovered {len(result['text'])} characters.")
+            else:
+                raise Exception("pdfplumber extracted no text")
+                
+        except Exception as salvage_e:
+            # Fallback 2: Raw Binary Extraction (If the file is completely destroyed)
+            try:
+                with open(file_path, 'rb') as f:
+                    content = f.read()
+                    strings = re.findall(b'[a-zA-Z0-9\s,\.\-\@\+]{5,}', content)
+                    result["text"] = " ".join([s.decode('ascii', errors='ignore') for s in strings])
+                if result["text"].strip():
+                    print(f"[parser] ✓ Binary Salvage successful! Recovered {len(result['text'])} characters.")
+                else:
+                    print(f"[parser] ❌ File is fundamentally unreadable.")
+            except Exception as bin_e:
+                print(f"[parser] ❌ Total failure on broken PDF.")
+
     return result
 
 def extract_text_from_docx(file_path: str) -> dict:
