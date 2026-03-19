@@ -1,6 +1,7 @@
 """
 watcher.py — Instant File System Monitor
 Bypasses existing files in <1 second and sends new files to batch_process.
+Features: Enterprise Chunking for 30K+ Data Loads
 """
 import os
 import time
@@ -46,7 +47,6 @@ def sync_existing_files():
     
     db = SessionLocal()
     try:
-        # Fetching a set of filenames takes <0.1 seconds even for 100k rows
         existing_filenames = {r[0] for r in db.query(Resume.filename).all()}
     finally:
         db.close()
@@ -56,10 +56,22 @@ def sync_existing_files():
     if new_files:
         print(f"[sync] Bypassed {len(current_files) - len(new_files)} existing DB files.")
         print(f"[sync] Found {len(new_files)} NEW resumes. Starting extraction...")
-        # Utilize maximum safe threads for IO heavy processing
+        
         optimal_threads = min(32, (os.cpu_count() or 4) * 4) 
-        batch_process(new_files, max_workers=optimal_threads)
-        stats["total_processed"] += len(new_files)
+        
+        # --- THE FIX: ENTERPRISE CHUNKING FOR MASSIVE RAM PROTECTION ---
+        # --- THE FIX: ENTERPRISE CHUNKING FOR MASSIVE RAM PROTECTION ---
+        CHUNK_SIZE = 100  # Reduced to 100 for ultimate stability
+        for i in range(0, len(new_files), CHUNK_SIZE):
+            chunk = new_files[i:i + CHUNK_SIZE]
+            print(f"\n[sync] 📦 Processing Batch {i//CHUNK_SIZE + 1} (Files {i} to {i+len(chunk)})...")
+            
+            # Hard-capped at 3 threads so it doesn't overwhelm your laptop's memory
+            batch_process(chunk, max_workers=3) 
+            
+            stats["total_processed"] += len(chunk)
+            time.sleep(3) # Give your PC's RAM 3 full seconds to breathe
+            
     else:
         print(f"[sync] All {len(current_files)} resumes are already in the Database. Ready instantly! ✓\n")
 
