@@ -60,11 +60,10 @@ def sync_existing_files():
         optimal_threads = min(32, (os.cpu_count() or 4) * 4) 
         
         # --- THE FIX: ENTERPRISE CHUNKING FOR MASSIVE RAM PROTECTION ---
-        # --- THE FIX: ENTERPRISE CHUNKING FOR MASSIVE RAM PROTECTION ---
         CHUNK_SIZE = 100  # Reduced to 100 for ultimate stability
         for i in range(0, len(new_files), CHUNK_SIZE):
             chunk = new_files[i:i + CHUNK_SIZE]
-            print(f"\n[sync] 📦 Processing Batch {i//CHUNK_SIZE + 1} (Files {i} to {i+len(chunk)})...")
+            print(f"\n[sync] 📦 Processing Batch {i//CHUNK_SIZE + 1} (Files {i} to {i+len(chunk)})...", flush=True)
             
             # Hard-capped at 3 threads so it doesn't overwhelm your laptop's memory
             batch_process(chunk, max_workers=3) 

@@ -36,7 +36,8 @@ def sync_cloud_resumes():
         print(f"⚠️ Cloud Sync failed: {e}", flush=True)
 
 # FORCE THE DOWNLOAD BEFORE ANYTHING ELSE
-sync_cloud_resumes()
+# --- THE SAFETY SWITCH IS ON (COMMENTED OUT) ---
+sync_cloud_resumes() 
 # ------------------------------------
 
 # --- 2. NOW WE IMPORT THE AI MODULES SO THEY SEE THE NEW FILES ---

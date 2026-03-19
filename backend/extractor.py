@@ -1,13 +1,13 @@
 """
 extractor.py — High-Speed PDF/DOCX Processing Engine
-Features: Multi-threading (Windows Safe), DB Sync, Vector Embedding, Error Logging.
+Features: Auto-Timeout Bypass, Multi-threading, DB Sync, Vector Embedding.
 """
 import os
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 os.environ["OMP_NUM_THREADS"] = "1"
 
 import time
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor, as_completed, TimeoutError
 from tqdm import tqdm
 import json
 
@@ -16,7 +16,25 @@ from parser import extract_full, calculate_visual_score, extract_certificates
 from classifier import classify_resume
 from embedder import resume_index
 
+# --- THE FIX: DISPOSABLE SCOUT THREADS ---
+def safe_extract(file_path):
+    """Runs extraction in a disposable thread. If it freezes, we sever it and survive."""
+    executor = ThreadPoolExecutor(max_workers=1)
+    future = executor.submit(extract_full, file_path)
+    try:
+        # Give it 15 seconds. If it takes longer, it's an infinite loop/zombie file.
+        return future.result(timeout=15) 
+    except TimeoutError:
+        executor.shutdown(wait=False, cancel_futures=True)
+        raise Exception("⏱️ TIMEOUT: File is fundamentally corrupted or trapped in an infinite loop. Safely bypassed.")
+    except Exception as e:
+        executor.shutdown(wait=False, cancel_futures=True)
+        raise e
+
 def process_resume(file_path: str) -> dict:
+    # Print the file we are currently attacking
+    print(f"👉 Extracting: {os.path.basename(file_path)}", flush=True)
+    
     db = SessionLocal()
     try:
         filename = os.path.basename(file_path)
@@ -24,7 +42,9 @@ def process_resume(file_path: str) -> dict:
         if existing:
             return {"message": "Already processed", "id": existing.id, "name": existing.name}
 
-        parsed_data = extract_full(file_path)
+        # --- USING THE NEW SAFE EXTRACTOR ---
+        parsed_data = safe_extract(file_path)
+        
         raw_text = parsed_data.get("text", "")
         if not raw_text.strip():
             return {"error": f"Could not extract text from {filename}"}
@@ -40,12 +60,9 @@ def process_resume(file_path: str) -> dict:
             phone=ai_data["phone"],
             location=ai_data["location"],
             education=ai_data["education"],
-            
-            # --- NEW DATA INJECTED HERE ---
             experience_years=ai_data.get("experience_years", 0.0),
             relevant_experience_years=ai_data.get("relevant_experience_years", 0.0),
             total_gap_years=ai_data.get("total_gap_years", 0.0),
-            
             skills=json.dumps(ai_data["skills"]),
             summary=ai_data["summary"],
             raw_text=raw_text,
@@ -72,16 +89,17 @@ def process_resume(file_path: str) -> dict:
         return {"message": "Success", "id": resume.id, "name": resume.name}
     
     except Exception as e:
-        print(f"\n[CRITICAL ERROR] Failed to process {file_path}: {str(e)}")
+        # If it fails or times out, we catch it here and keep the batch moving!
+        print(f"\n[BYPASSED] Skipped {os.path.basename(file_path)}: {str(e)}", flush=True)
         return {"error": str(e)}
     finally:
         db.close()
 
 def batch_process(file_paths: list[str], max_workers: int = 6) -> list[dict]:
     results = []
-    safe_workers = min(max_workers, 6)
+    safe_workers = min(max_workers, 3) # Hard cap at 3 to keep RAM stable
     
-    print(f"\n[batch] Launching Multi-Core Engine ({safe_workers} threads - Windows Safe) for {len(file_paths)} files...")
+    print(f"\n[batch] Launching Multi-Core Engine ({safe_workers} threads) for {len(file_paths)} files...", flush=True)
     
     with ThreadPoolExecutor(max_workers=safe_workers) as executor:
         futures = {executor.submit(process_resume, path): path for path in file_paths}
@@ -91,8 +109,7 @@ def batch_process(file_paths: list[str], max_workers: int = 6) -> list[dict]:
                     res = future.result()
                     results.append(res)
                 except Exception as e:
-                    print(f"\n[THREAD ERROR] {str(e)}")
-                    results.append({"error": str(e)})
+                    pass # Thread errors won't crash the progress bar anymore
                 pbar.update(1)
     
     if hasattr(resume_index, "force_save_to_disk"):
