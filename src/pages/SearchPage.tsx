@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Search, Sparkles, Clock, Loader2, Zap, Brain, User,
   MapPin, Download, SlidersHorizontal, FileDown, Trophy, Shield, 
-  CheckCircle2, AlertTriangle, Github, Linkedin, Code2, Terminal, UserMinus, ChevronLeft, ChevronRight
+  CheckCircle2, AlertTriangle, Github, Linkedin, Code2, Terminal, UserMinus, ChevronLeft, ChevronRight, RotateCcw
 } from 'lucide-react';
 import CandidateCard from '@/components/CandidateCard';
 import GlowingCard from '@/components/GlowingCard';
@@ -20,7 +20,9 @@ export default function SearchPage() {
   const [error, setError] = useState(''); 
   const [liveStatus, setLiveStatus] = useState<any>(null);
   
-  const [showFilters, setShowFilters] = useState(false);
+  // --- DEFAULT OPEN NOW ---
+  const [showFilters, setShowFilters] = useState(true);
+  
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [suggestions, setSuggestions] = useState<any>(null);
   const [selectedCandidate, setSelectedCandidate] = useState<any>(null);
@@ -81,6 +83,23 @@ export default function SearchPage() {
     }
   };
 
+  // --- NEW RESET FUNCTION ---
+  const handleReset = () => {
+    setQuery('');
+    setMinExp(0);
+    setEduFilter('');
+    setMandatorySkills('');
+    setSecondarySkills('');
+    setMandatoryLocation('');
+    setTopN('');
+    setRequireLinkedin(false);
+    setRequireGithub(false);
+    setRequireLeetcode(false);
+    setRequireHackerrank(false);
+    setRequireCodechef(false);
+    setResult(null);
+  };
+
   const handleSearch = async (targetPage = 1) => {
     const q = query;
     if (!q.trim() && !mandatorySkills && !mandatoryLocation) return;
@@ -134,7 +153,6 @@ export default function SearchPage() {
 
   return (
     <>
-      {/* --- THE FIX: The page content is wrapped independently from the Modal --- */}
       <motion.div variants={containerVariants} initial="hidden" animate="visible" className="space-y-8 pb-20">
         <motion.div variants={itemVariants} className="text-center py-6">
           <h1 className="text-3xl md:text-4xl font-extrabold font-display mb-2 tracking-tight">
@@ -161,13 +179,23 @@ export default function SearchPage() {
             
               <div className="flex items-center gap-2 shrink-0">
                   <motion.button
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                  onClick={() => setShowFilters(!showFilters)}
-                  className={`p-3 rounded-xl transition-colors flex items-center gap-2 h-full ${showFilters ? 'bg-primary/20 text-primary ring-1 ring-primary/50' : 'text-muted-foreground hover:text-foreground hover:bg-secondary border border-border/50 bg-background/50 backdrop-blur-md'}`}
-                  title="Advanced Filters"
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={handleReset}
+                    className="p-3 rounded-xl transition-colors flex items-center gap-2 h-full text-muted-foreground hover:text-destructive hover:bg-destructive/10 border border-border/50 bg-background/50 backdrop-blur-md"
+                    title="Reset All Filters"
                   >
-                  <SlidersHorizontal className="w-5 h-5" />
+                    <RotateCcw className="w-5 h-5" />
+                  </motion.button>
+
+                  <motion.button
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={() => setShowFilters(!showFilters)}
+                    className={`p-3 rounded-xl transition-colors flex items-center gap-2 h-full ${showFilters ? 'bg-primary/20 text-primary ring-1 ring-primary/50' : 'text-muted-foreground hover:text-foreground hover:bg-secondary border border-border/50 bg-background/50 backdrop-blur-md'}`}
+                    title="Toggle Filters"
+                  >
+                    <SlidersHorizontal className="w-5 h-5" />
                   </motion.button>
                   
                   <motion.button
@@ -181,12 +209,12 @@ export default function SearchPage() {
                   </motion.button>
 
                   <button
-                  onClick={() => handleSearch(1)}
-                  disabled={loading}
-                  className="btn-primary-glow !py-3 !px-6 !rounded-xl h-full"
+                    onClick={() => handleSearch(1)}
+                    disabled={loading}
+                    className="btn-primary-glow !py-3 !px-6 !rounded-xl h-full"
                   >
-                  {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Sparkles className="w-5 h-5" />}
-                  <span className="hidden sm:inline">Search</span>
+                    {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Sparkles className="w-5 h-5" />}
+                    <span className="hidden sm:inline">Search</span>
                   </button>
               </div>
           </div>
@@ -201,37 +229,35 @@ export default function SearchPage() {
               >
                 <div className="glass-panel p-6 border border-primary/20 shadow-[0_0_30px_rgba(var(--primary-rgb),0.1)]">
                   
-                  <div className="mb-6">
-                    <h3 className="text-xs font-display font-bold text-warning uppercase tracking-widest flex items-center gap-2 mb-4">
-                      <AlertTriangle className="w-4 h-4" /> Mandatory Requirements (Must Have)
+                  {/* --- NEW SKILLS ALIGNMENT --- */}
+                  <div className="mb-5">
+                    <h3 className="text-xs font-display font-bold text-primary uppercase tracking-widest flex items-center gap-2 mb-4">
+                      <Brain className="w-4 h-4" /> AI Semantic Skills
                     </h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
-                        <label className="text-[10px] text-muted-foreground mb-1 block uppercase tracking-wider">Required Skills (Comma separated)</label>
-                        <input className="input-glass !py-2 text-sm" placeholder="e.g. Python, React, AWS" value={mandatorySkills} onChange={e => setMandatorySkills(e.target.value)} />
+                        <label className="text-[10px] text-warning mb-1 block uppercase tracking-wider font-bold">Mandatory Skills (Must Have)</label>
+                        <input className="input-glass !py-2 text-sm border-warning/30 focus:border-warning" placeholder="e.g. Python, React, AWS" value={mandatorySkills} onChange={e => setMandatorySkills(e.target.value)} />
                       </div>
                       <div>
-                        <label className="text-[10px] text-muted-foreground mb-1 block uppercase tracking-wider">Required Location (Global)</label>
-                        <input className="input-glass !py-2 text-sm" placeholder="e.g. India, Remote, New York" value={mandatoryLocation} onChange={e => setMandatoryLocation(e.target.value)} />
+                        <label className="text-[10px] text-success mb-1 block uppercase tracking-wider font-bold">Secondary Skills (Nice to Have)</label>
+                        <input className="input-glass !py-2 text-sm border-success/30 focus:border-success" placeholder="e.g. Docker, Redis" value={secondarySkills} onChange={e => setSecondarySkills(e.target.value)} />
                       </div>
                     </div>
                   </div>
 
                   <div className="w-full h-px bg-border my-5" />
 
+                  {/* --- NEW LOCATION & EXPERIENCE ALIGNMENT --- */}
                   <div>
                     <h3 className="text-xs font-display font-bold text-primary uppercase tracking-widest flex items-center gap-2 mb-4">
-                      <CheckCircle2 className="w-4 h-4" /> Secondary Preferences (Nice to Have)
+                      <SlidersHorizontal className="w-4 h-4" /> Logistics & Experience
                     </h3>
                     
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
                       <div>
-                        <label className="text-[10px] text-muted-foreground mb-1 block uppercase tracking-wider">Top N Limit</label>
-                        <input type="number" min="1" className="input-glass !py-2 text-sm" placeholder="e.g. 10 (Leave blank for all)" value={topN} onChange={e => setTopN(e.target.value)} />
-                      </div>
-                      <div>
-                        <label className="text-[10px] text-muted-foreground mb-1 block uppercase tracking-wider">Bonus Skills</label>
-                        <input className="input-glass !py-2 text-sm" placeholder="e.g. Docker, Redis" value={secondarySkills} onChange={e => setSecondarySkills(e.target.value)} />
+                        <label className="text-[10px] text-muted-foreground mb-1 block uppercase tracking-wider">Location (Global)</label>
+                        <input className="input-glass !py-2 text-sm" placeholder="e.g. India, Remote, New York" value={mandatoryLocation} onChange={e => setMandatoryLocation(e.target.value)} />
                       </div>
                       <div>
                         <label className="text-[10px] text-muted-foreground mb-1 block uppercase tracking-wider">Min Experience</label>
@@ -239,6 +265,10 @@ export default function SearchPage() {
                           <input type="range" min="0" max="15" value={minExp} onChange={e => setMinExp(Number(e.target.value))} className="w-full accent-primary" />
                           <span className="text-xs font-bold w-12">{minExp}+ yr</span>
                         </div>
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-muted-foreground mb-1 block uppercase tracking-wider">Top N Limit</label>
+                        <input type="number" min="1" className="input-glass !py-2 text-sm" placeholder="e.g. 10 (Leave blank)" value={topN} onChange={e => setTopN(e.target.value)} />
                       </div>
                     </div>
 
@@ -363,7 +393,6 @@ export default function SearchPage() {
         </AnimatePresence>
       </motion.div>
 
-      {/* --- THE FIX: Modal is rendered OUTSIDE of the transform trap! --- */}
       <CandidateModal
         candidate={selectedCandidate}
         onClose={() => setSelectedCandidate(null)}

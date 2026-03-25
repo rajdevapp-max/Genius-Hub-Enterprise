@@ -13,6 +13,17 @@ export default function CandidateModal({ candidate, onClose }) {
   const [previewText, setPreviewText] = useState('');
   const [loadingPreview, setLoadingPreview] = useState(false);
 
+  // --- NEW ESCAPE KEY LISTENER ---
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape' && candidate) {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [candidate, onClose]);
+
   useEffect(() => {
     if (candidate && tab === 'preview' && !previewText) {
       setLoadingPreview(true);
@@ -50,7 +61,6 @@ export default function CandidateModal({ candidate, onClose }) {
     <AnimatePresence>
       {candidate && (
         <>
-          {/* --- THE FIX: z-[999] forces this to absolutely overlap your sidebar and navbar --- */}
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             className="fixed inset-0 z-[999] bg-background/60 backdrop-blur-md" onClick={onClose} />
           
@@ -196,7 +206,6 @@ export default function CandidateModal({ candidate, onClose }) {
                           </div>
                         )}
                         
-                        {/* --- NEW DETAILED EXPERIENCE BOX --- */}
                         {rawExp > 0 && (
                           <div className="flex flex-col justify-center text-sm text-muted-foreground p-2 rounded-xl bg-secondary/20">
                             <div className="flex items-center gap-2">
