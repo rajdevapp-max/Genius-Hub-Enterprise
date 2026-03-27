@@ -1,18 +1,25 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Loader2, Trophy, XCircle, BookOpenText, Target as TargetIcon } from 'lucide-react';
+import { FileText, Sparkles, Loader2, Target, CheckCircle2, XCircle, FileDown, Trophy, Shield, Zap, AlertTriangle } from 'lucide-react';
 import CandidateCard from '@/components/CandidateCard';
 import CandidateModal from '@/components/CandidateModal';
+import GlowingCard from '@/components/GlowingCard';
 import type { JDMatchResponse, Candidate } from '@/lib/types';
 import { api } from '@/lib/api';
 
-const itemVariants = {
-  hidden: { y: 20, opacity: 0 },
-  visible: { y: 0, opacity: 1, transition: { type: 'spring', stiffness: 300, damping: 24 } }
-};
+const SAMPLE_JD = `We are looking for a Senior Full Stack Developer with 5+ years of experience.
 
-// FULL ORIGINAL SAMPLE JD RESTORED
-const SAMPLE_JD = `We are looking for a Senior Full Stack Developer with 5+ years of experience.\n\nRequirements:\n- Strong proficiency in React, TypeScript, and Node.js\n- Experience with cloud services (AWS/GCP)\n- Knowledge of SQL and NoSQL databases\n- Experience with CI/CD pipelines and Docker\n- Excellent problem-solving skills\n\nNice to have:\n- Experience with microservices architecture\n- Knowledge of GraphQL\n- Contributions to open-source projects`;
+Requirements:
+- Strong proficiency in React, TypeScript, and Node.js
+- Experience with cloud services (AWS/GCP)
+- Knowledge of SQL and NoSQL databases
+- Experience with CI/CD pipelines and Docker
+- Excellent problem-solving skills
+
+Nice to have:
+- Experience with microservices architecture
+- Knowledge of GraphQL
+- Contributions to open-source projects`;
 
 export default function JDMatchPage() {
   const [jd, setJd] = useState('');
@@ -21,6 +28,7 @@ export default function JDMatchPage() {
   const [error, setError] = useState('');
   const [selectedCandidate, setSelectedCandidate] = useState<Candidate | null>(null);
 
+  // --- THE FIX: Added Bookmarking State to fix TS error and add functionality ---
   const [bookmarks, setBookmarks] = useState<Set<number>>(() => {
     try { return new Set(JSON.parse(localStorage.getItem('bookmarks') || '[]')); } catch { return new Set(); }
   });
@@ -32,111 +40,184 @@ export default function JDMatchPage() {
   const toggleBookmark = (id: number) => {
     setBookmarks(prev => {
       const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
+      next.has(id) ? next.delete(id) : next.add(id);
       return next;
     });
   };
 
   const handleMatch = async () => {
     if (!jd.trim()) return;
+    setResult(null);
     setLoading(true);
     setError('');
     try {
-      const data = await api.jdMatch(jd); 
+      const data = await api.matchJD({ job_description: jd, top_k: 30 });
       setResult(data);
-    } catch (err: any) {
-      setError(err.message || 'Failed to analyze JD. Please check your backend connection.');
+    } catch (e: any) {
+      setError(e.message || 'Match failed.');
     } finally {
       setLoading(false);
     }
   };
 
+  const exportResults = () => {
+    if (!result?.candidates.length) return;
+    window.open(api.exportCSV(result.candidates.map(c => c.id)), '_blank');
+  };
+
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-8 max-w-5xl mx-auto pb-20">
-      
-      <div className="text-center py-8 relative">
-        <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="mb-6 relative inline-block">
-            <div className="absolute inset-0 bg-primary/20 blur-3xl rounded-full scale-150" />
-            
-            {/* WIDE LOGO WITHOUT THE RESTRICTIVE GREY BOX */}
-            <div className="relative mx-auto flex justify-center items-center h-20 mb-2">
-              <img src="/bay-area-final.jpeg" alt="Company Logo" className="max-w-[220px] h-full object-contain relative z-10 drop-shadow-2xl rounded-lg" />
+    <>
+      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-8 pb-20">
+        
+        <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="text-center py-4">
+          <motion.div
+            initial={{ scale: 0, rotate: -180 }}
+            animate={{ scale: 1, rotate: 0 }}
+            transition={{ type: 'spring', stiffness: 200, delay: 0.1 }}
+            className="w-14 h-14 rounded-2xl flex items-center justify-center mx-auto mb-3 relative glow-ring"
+            style={{ background: 'linear-gradient(135deg, hsl(var(--neon-cyan)), hsl(var(--neon-blue)))' }}
+          >
+            <Target className="w-7 h-7 text-primary-foreground" />
+          </motion.div>
+          <h1 className="text-3xl font-extrabold font-display mb-2 tracking-tight">
+            <span className="gradient-text-accent">JD MATCH</span>
+          </h1>
+          <p className="text-sm text-muted-foreground max-w-md mx-auto">
+            Paste a job description — AI extracts requirements and strictly matches top candidates
+          </p>
+        </motion.div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.2 }} className="space-y-3">
+            <div className="relative">
+              <textarea className="input-glass min-h-[300px] resize-none w-full" placeholder="Paste job description here..." value={jd} onChange={(e) => setJd(e.target.value)} />
+              <div className="absolute bottom-3 right-3 text-[10px] font-mono text-muted-foreground">{jd.length} chars</div>
             </div>
-            
-        </motion.div>
+            <div className="flex gap-2">
+              <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+                onClick={handleMatch} disabled={loading || !jd.trim()} className="btn-primary-glow flex-1">
+                {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Target className="w-4 h-4" />} Analyze & Match
+              </motion.button>
+              <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
+                onClick={() => setJd(SAMPLE_JD)} className="btn-ghost-glow">Sample JD</motion.button>
+            </div>
+          </motion.div>
 
-        <h1 className="text-3xl md:text-4xl font-extrabold mb-3 tracking-tight" style={{ fontFamily: "'Inter', 'SF Pro Display', 'Helvetica Neue', sans-serif", letterSpacing: "-0.02em" }}>
-          <span className="gradient-text">JD MATCH</span>
-        </h1>
-        <p className="text-muted-foreground max-w-2xl mx-auto text-sm leading-relaxed bg-secondary/30 py-2 px-4 rounded-full border border-border">
-          Paste a job description — <span className="text-primary font-semibold">GeniusHub</span> extracts requirements and strictly matches top candidates
-        </p>
-      </div>
+          <AnimatePresence mode="wait">
+            {result ? (
+              <motion.div key="results" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }} className="space-y-4">
+                <GlowingCard className="p-5 holo-shimmer">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <Zap className="w-4 h-4 text-accent" />
+                      <h3 className="text-[10px] font-display font-semibold text-muted-foreground uppercase tracking-widest">EXTRACTED REQUIREMENTS</h3>
+                    </div>
+                    <button onClick={exportResults} className="btn-ghost-glow !px-3 !py-1 !text-[10px]">
+                      <FileDown className="w-3 h-3" /> Export
+                    </button>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5 mb-4">
+                    {result.required_skills?.map((s, i) => (
+                      <motion.span key={s} initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ delay: i * 0.03 }} className="skill-tag border border-warning text-warning bg-warning/10">{s}</motion.span>
+                    ))}
+                  </div>
+                  <div className="flex items-center gap-4 text-[10px] font-mono text-muted-foreground">
+                    <span className="flex items-center gap-1"><Shield className="w-3 h-3" /> Strict Filter Applied</span>
+                    <span className="flex items-center gap-1"><CheckCircle2 className="w-3 h-3 text-success" /> {result.candidates.length} perfect matches</span>
+                    <span>⏱ {(result.total_time * 1000).toFixed(0)}ms</span>
+                  </div>
+                </GlowingCard>
 
-      <div className="glass-panel p-3 flex flex-col h-[400px]">
-        <div className="flex items-center justify-between p-3 border-b border-border">
-          <div className="flex items-center gap-3">
-            <BookOpenText className="w-5 h-5 text-primary" />
-            <span className="text-sm font-semibold tracking-tight">Raw Job Description</span>
-          </div>
-          <span className="text-[10px] font-mono text-muted-foreground uppercase px-2 py-0.5 rounded-md bg-secondary">UTF-8 / Plain Text</span>
+                {result.candidates.length > 0 && (
+                  <GlowingCard className="p-5" delay={0.1}>
+                    <h3 className="text-[10px] font-display font-semibold text-muted-foreground uppercase tracking-widest mb-3 flex items-center gap-2">
+                      <Trophy className="w-3 h-3 text-warning" /> TOP MATCHES
+                    </h3>
+                    <div className="space-y-2.5">
+                      {result.candidates.slice(0, 5).map((c, i) => {
+                        const isFraud = c.fraud_flag === 1;
+                        return (
+                          <motion.div key={c.id || i} initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.2 + i * 0.08 }}
+                            className="flex items-center gap-3">
+                            <span className={`w-6 h-6 rounded-lg flex items-center justify-center text-[10px] font-bold shrink-0 ${i === 0 ? 'rank-gold' : i === 1 ? 'rank-silver' : i === 2 ? 'rank-bronze' : 'bg-secondary text-muted-foreground'}`}>
+                              {i + 1}
+                            </span>
+                            
+                            <span className={`text-xs w-28 truncate font-medium flex items-center gap-1 ${isFraud ? 'text-destructive' : 'text-foreground'}`}>
+                              {c.name}
+                              {isFraud && <AlertTriangle className="w-3 h-3 shrink-0" />}
+                            </span>
+
+                            <div className="flex-1 h-2 rounded-full bg-secondary overflow-hidden">
+                              <motion.div initial={{ width: 0 }} animate={{ width: `${c.score}%` }}
+                                transition={{ delay: 0.3 + i * 0.08, duration: 0.8 }}
+                                className="h-full rounded-full"
+                                style={{ 
+                                  background: isFraud 
+                                    ? 'hsl(var(--destructive))' 
+                                    : `linear-gradient(90deg, hsl(var(--neon-blue)), hsl(var(${c.score > 75 ? '--success' : c.score > 50 ? '--warning' : '--destructive'})))` 
+                                }} 
+                              />
+                            </div>
+                            <span className={`text-xs font-bold font-display w-10 text-right ${isFraud ? 'text-destructive' : 'text-foreground'}`}>
+                              {c.score}%
+                            </span>
+                          </motion.div>
+                        );
+                      })}
+                    </div>
+                  </GlowingCard>
+                )}
+              </motion.div>
+            ) : (
+              <motion.div key="empty" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0 }}>
+                <GlowingCard className="p-10 text-center h-full flex flex-col items-center justify-center">
+                  <div className="w-14 h-14 rounded-2xl bg-accent/10 flex items-center justify-center mx-auto mb-4">
+                    <FileText className="w-7 h-7 text-accent" />
+                  </div>
+                  <h3 className="text-base font-bold text-foreground mb-2">Intelligent JD Matching</h3>
+                  <p className="text-sm text-muted-foreground max-w-sm leading-relaxed">
+                    AI extracts skills, experience, and role details, then strictly filters out candidates lacking the requirements.
+                  </p>
+                </GlowingCard>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
-        
-        {/* TEXTAREA WITH RESTORED SAMPLE JD */}
-        <textarea
-          value={jd}
-          onChange={(e) => setJd(e.target.value)}
-          placeholder={SAMPLE_JD}
-          className="flex-1 p-5 bg-transparent text-sm resize-none focus:outline-none leading-relaxed placeholder:text-muted-foreground/30 font-mono whitespace-pre-wrap"
-        />
-        
-        <div className="p-3 border-t border-border mt-auto flex justify-between items-center bg-secondary/20 rounded-b-lg">
-            <span className="text-xs text-muted-foreground font-mono">{jd.length} chars</span>
-            <button
-                onClick={handleMatch}
-                disabled={loading || !jd.trim()}
-                className="btn-primary-glow !py-2.5 !px-8"
-            >
-                {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <TargetIcon className="w-4 h-4" />}
-                Match Candidates
-            </button>
-        </div>
-      </div>
 
-      {/* ERROR HANDLING */}
-      {error && (
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="glass-panel p-5 border-destructive/20 bg-destructive/5">
-          <p className="text-sm text-destructive flex items-center gap-2"><XCircle className="w-4 h-4" />{error}</p>
-        </motion.div>
-      )}
-
-      {/* RESULTS SECTION RESTORED */}
-      <AnimatePresence>
-        {result && result.candidates && result.candidates.length > 0 && (
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-3 mt-8">
-            <h2 className="text-sm font-display font-bold text-foreground flex items-center gap-2 tracking-wider uppercase">
-              <Trophy className="w-4 h-4 text-warning" />
-              Top {result.candidates.length} Strict Matches
-            </h2>
-            {result.candidates.map((c, i) => (
-              <CandidateCard 
-                key={c.id || i} 
-                candidate={c} 
-                rank={i + 1} 
-                bookmarked={bookmarks.has(c.id)}
-                onBookmark={() => toggleBookmark(c.id)}
-                onViewDetail={() => setSelectedCandidate(c)} 
-              />
-            ))}
+        {error && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="glass-panel p-5 border-destructive/20">
+            <p className="text-sm text-destructive flex items-center gap-2"><XCircle className="w-4 h-4" />{error}</p>
           </motion.div>
         )}
-      </AnimatePresence>
+
+        <AnimatePresence>
+          {result && result.candidates.length > 0 && (
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-3 mt-8">
+              <h2 className="text-sm font-display font-bold text-foreground flex items-center gap-2 tracking-wider uppercase">
+                <Trophy className="w-4 h-4 text-warning" />
+                Top {result.candidates.length} Strict Matches
+              </h2>
+              {result.candidates.map((c, i) => (
+                <CandidateCard 
+                  key={c.id || i} 
+                  candidate={c} 
+                  rank={i + 1} 
+                  // --- THE FIX: Passed the missing props here ---
+                  bookmarked={bookmarks.has(c.id)}
+                  onBookmark={() => toggleBookmark(c.id)}
+                  onViewDetail={() => setSelectedCandidate(c)} 
+                />
+              ))}
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </motion.div>
 
       <CandidateModal
         candidate={selectedCandidate}
         onClose={() => setSelectedCandidate(null)}
       />
-    </motion.div>
+    </>
   );
 }

@@ -1,15 +1,14 @@
 import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Search, FileText, BarChart3, Upload, Menu, X } from 'lucide-react';
+import { Search, FileText, BarChart3, Upload, Brain, Menu, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ThemeToggle, useTheme } from '@/components/ThemeToggle';
 
 const navItems = [
-  { path: '/', label: 'AI Search', icon: Search, customIcon: null, desc: 'Hybrid intelligence' },
-  // FIX: Using the already-working bay-area-final image for JD Match
-  { path: '/jd-match', label: 'JD Match', icon: FileText, customIcon: <img src="/bay-area-final.jpeg" className="w-5 h-5 object-contain" alt="JD Logo" />, desc: 'Job description match' },
-  { path: '/analytics', label: 'Analytics', icon: BarChart3, customIcon: null, desc: 'Real-time dashboard' },
-  { path: '/upload', label: 'Upload', icon: Upload, customIcon: null, desc: 'Add resumes' },
+  { path: '/', label: 'AI Search', icon: Search, desc: 'Hybrid intelligence' },
+  { path: '/jd-match', label: 'JD Match', icon: FileText, desc: 'Job description match' },
+  { path: '/analytics', label: 'Analytics', icon: BarChart3, desc: 'Real-time dashboard' },
+  { path: '/upload', label: 'Upload', icon: Upload, desc: 'Add resumes' },
 ];
 
 export default function Layout({ children }: { children: React.ReactNode }) {
@@ -21,20 +20,23 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     <div className="flex min-h-screen bg-background">
       <motion.aside
         animate={{ width: collapsed ? 68 : 260 }}
+        // --- THE FIX: Dropped Sidebar z-index to 40 so Modals can overlap it ---
         className="fixed left-0 top-0 bottom-0 z-40 flex flex-col border-r border-sidebar-border bg-sidebar overflow-hidden"
         style={{ boxShadow: '4px 0 30px hsl(var(--background) / 0.5)' }}
       >
+        {/* Logo */}
         <div className="flex items-center gap-3 px-4 h-16 border-b border-sidebar-border shrink-0">
           <motion.div
-            whileHover={{ scale: 1.05 }}
-            className="w-9 h-9 flex items-center justify-center shrink-0 overflow-hidden rounded-md bg-white"
+            whileHover={{ rotate: 15, scale: 1.1 }}
+            className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
+            style={{ background: 'linear-gradient(135deg, hsl(var(--neon-blue)), hsl(var(--neon-cyan)))' }}
           >
-            <img src="/bay-area-final.jpeg" alt="BATS Logo" className="w-full h-full object-contain" />
+            <Brain className="w-4.5 h-4.5 text-primary-foreground" />
           </motion.div>
           <AnimatePresence>
             {!collapsed && (
               <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="overflow-hidden whitespace-nowrap">
-                <h1 className="text-sm font-extrabold tracking-wide text-foreground" style={{ fontFamily: "'Inter', 'SF Pro Display', 'Helvetica Neue', sans-serif" }}>BATS GeniusHub</h1>
+                <h1 className="text-xs font-bold font-display tracking-wider text-foreground">RESUME AI</h1>
                 <p className="text-[9px] text-muted-foreground tracking-wide">INTELLIGENCE v6.0</p>
               </motion.div>
             )}
@@ -47,15 +49,18 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           </button>
         </div>
 
+        {/* Nav */}
         <nav className="flex-1 py-4 px-2.5 space-y-1">
-          {navItems.map(({ path, label, icon: Icon, desc, customIcon }) => {
+          {navItems.map(({ path, label, icon: Icon, desc }) => {
             const active = location.pathname === path;
             return (
               <Link
                 key={path}
                 to={path}
                 className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-300 relative group ${
-                  active ? 'text-primary' : 'text-muted-foreground hover:text-foreground hover:bg-secondary/60'
+                  active
+                    ? 'text-primary'
+                    : 'text-muted-foreground hover:text-foreground hover:bg-secondary/60'
                 }`}
               >
                 {active && (
@@ -66,13 +71,11 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                     transition={{ type: 'spring', stiffness: 400, damping: 30 }}
                   />
                 )}
-                
                 <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 transition-all relative z-10 ${
                   active ? 'bg-primary/15' : 'bg-secondary/40 group-hover:bg-secondary'
                 }`}>
-                  {customIcon ? customIcon : <Icon className="w-4 h-4" />}
+                  <Icon className="w-4 h-4" />
                 </div>
-
                 <AnimatePresence>
                   {!collapsed && (
                     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="min-w-0 relative z-10">
@@ -86,6 +89,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           })}
         </nav>
 
+        {/* Footer */}
         <div className="p-3 border-t border-sidebar-border space-y-2">
           <div className="flex items-center justify-center">
             <ThemeToggle theme={theme} toggle={toggle} />
@@ -99,6 +103,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         </div>
       </motion.aside>
 
+      {/* --- THE FIX: Removed z-10 here so it doesn't create a trapped stacking context --- */}
       <main className="flex-1 transition-all duration-300 relative" style={{ marginLeft: collapsed ? 68 : 260 }}>
         <div className="p-6 lg:p-8 max-w-7xl mx-auto">{children}</div>
       </main>
