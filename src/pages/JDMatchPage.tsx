@@ -7,7 +7,7 @@ import GlowingCard from '@/components/GlowingCard';
 import type { JDMatchResponse, Candidate } from '@/lib/types';
 import { api } from '@/lib/api';
 
-const SAMPLE_JD = `We are looking for a Senior Full Stack Developer with 5+ years of experience.\n\nRequirements:\n- Strong proficiency in React, TypeScript, and Node.js\n- Experience with cloud services (AWS/GCP)\n- Knowledge of SQL and NoSQL databases\n- Experience with CI/CD pipelines and Docker\n- Excellent problem-solving skills`;
+const SAMPLE_JD = `We are looking for a Senior Full Stack Developer with 5+ years of experience.\n\nRequirements:\n- Strong proficiency in React, TypeScript, and Node.js\n- Experience with cloud services (AWS/GCP)\n- Knowledge of SQL and NoSQL databases\n- Experience with CI/CD pipelines and Docker\n- Excellent problem-solving skills\n\nNice to have:\n- Experience with microservices architecture\n- Knowledge of GraphQL\n- Contributions to open-source projects`;
 
 export default function JDMatchPage() {
   const [jd, setJd] = useState('');
@@ -38,7 +38,6 @@ export default function JDMatchPage() {
     setLoading(true);
     setError('');
     try {
-      // Calls your existing native API to prevent Vercel crashes
       const data = await api.jdMatch(jd); 
       setResult(data);
     } catch (err: any) {
@@ -56,12 +55,16 @@ export default function JDMatchPage() {
         <div className="text-center py-8 relative">
           <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="mb-6 relative inline-block">
               <div className="absolute inset-0 bg-primary/20 blur-3xl rounded-full scale-150" />
-              <img src="/comp-logo.png" alt="Company Logo" className="w-24 h-24 object-contain relative z-10 drop-shadow-2xl" />
+              {/* --- HERE IS THE FIX: Replaced blue circles with your company logo in a styled box --- */}
+              <div className="w-24 h-24 rounded-3xl bg-secondary border border-border flex items-center justify-center relative shadow-inner overflow-hidden mx-auto">
+                <img src="/bay-area-final.jpeg" alt="Company Logo" className="w-16 h-16 object-contain relative z-10" />
+              </div>
           </motion.div>
 
           <h1 className="text-3xl md:text-4xl font-extrabold mb-3 tracking-tight" style={{ fontFamily: "'Inter', 'SF Pro Display', 'Helvetica Neue', sans-serif", letterSpacing: "-0.02em" }}>
             <span className="gradient-text">JD MATCH</span>
           </h1>
+          {/* --- HERE IS THE FIX: Updated text to GeniusHub --- */}
           <p className="text-muted-foreground max-w-2xl mx-auto text-sm leading-relaxed bg-secondary/30 py-2 px-4 rounded-full border border-border">
             Paste a job description — <span className="text-primary font-semibold">GeniusHub</span> extracts requirements and strictly matches top candidates
           </p>
@@ -95,7 +98,7 @@ export default function JDMatchPage() {
           </motion.div>
         )}
 
-        {/* Results */}
+        {/* Results Data Matrix (Restored) */}
         <AnimatePresence>
           {result && result.candidates && result.candidates.length > 0 && (
             <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-3 mt-8">

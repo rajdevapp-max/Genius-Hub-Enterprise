@@ -6,7 +6,7 @@ import { ThemeToggle, useTheme } from '@/components/ThemeToggle';
 
 const navItems = [
   { path: '/', label: 'AI Search', icon: Search, desc: 'Hybrid intelligence' },
-  { path: '/jd-match', label: 'JD Match', customIcon: <img src="/comp-logo.png" className="w-5 h-5 object-contain" alt="JD Logo" />, desc: 'Job description match' },
+  { path: '/jd-match', label: 'JD Match', customIcon: <img src="/bay-area-final.jpeg" className="w-5 h-5 object-contain" alt="JD Logo" />, desc: 'Job description match' },
   { path: '/analytics', label: 'Analytics', icon: BarChart3, desc: 'Real-time dashboard' },
   { path: '/upload', label: 'Upload', icon: Upload, desc: 'Add resumes' },
 ];
