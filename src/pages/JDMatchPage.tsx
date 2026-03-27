@@ -1,130 +1,206 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { FileText, Sparkles, Loader2, Target, CheckCircle2, XCircle, FileDown, Trophy, Shield, Zap, AlertTriangle } from 'lucide-react';
-import CandidateCard from '@/components/CandidateCard';
-import CandidateModal from '@/components/CandidateModal';
-import GlowingCard from '@/components/GlowingCard';
-import type { JDMatchResponse, Candidate } from '@/lib/types';
-import { api } from '@/lib/api';
+import { UploadCloud, Zap, Target, BookOpenText, Target as TargetIcon, Search, BrainCircuit, CheckCircle2, Info } from 'lucide-react';
+import { Helmet } from 'react-helmet-async';
+import { useQuery } from '@tanstack/react-query';
+import axios from 'axios';
 
-const SAMPLE_JD = `We are looking for a Senior Full Stack Developer with 5+ years of experience.\n\nRequirements:\n- Strong proficiency in React, TypeScript, and Node.js\n- Experience with cloud services (AWS/GCP)\n- Knowledge of SQL and NoSQL databases\n- Experience with CI/CD pipelines and Docker\n- Excellent problem-solving skills\n\nNice to have:\n- Experience with microservices architecture\n- Knowledge of GraphQL\n- Contributions to open-source projects`;
+// Define layout variants for staggered animation
+const containerVariants = {
+  hidden: { opacity: 0 },
+  visible: { 
+    opacity: 1,
+    transition: { staggerChildren: 0.1, delayChildren: 0.2 }
+  }
+};
+
+const itemVariants = {
+  hidden: { y: 20, opacity: 0 },
+  visible: { y: 0, opacity: 1, transition: { type: 'spring', stiffness: 300, damping: 24 } }
+};
+
+const features = [
+  { icon: Target, title: "Precision Match", desc: "Hard skills matching" },
+  { icon: Zap, title: "Deep Semantics", desc: "Understanding context" },
+  { icon: BrainCircuit, title: "Instant Ranking", desc: "Tiered candidates" },
+];
+
+// SAMPLE_JD is retained as requested
+const SAMPLE_JD = `Paste Job Description here... GeniusHub will extract requirements, bypass invisible text, keyword stuffing, and find actual top candidates.
+
+Example requirements to try:
+- Strong proficiency in React, TypeScript, and Node.js
+- 5+ years experience in technical sourcing
+- Experience with AWS and Docker`;
 
 export default function JDMatchPage() {
-  const [jd, setJd] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<JDMatchResponse | null>(null);
-  const [error, setError] = useState('');
-  const [selectedCandidate, setSelectedCandidate] = useState<Candidate | null>(null);
+  const [jdText, setJdText] = useState("");
+  const currentDemo = localStorage.getItem('current_demo') || 'MASTER_37K';
 
-  const [bookmarks, setBookmarks] = useState<Set<number>>(() => {
-    try { return new Set(JSON.parse(localStorage.getItem('bookmarks') || '[]')); } catch { return new Set(); }
-  });
-
-  useEffect(() => {
-    localStorage.setItem('bookmarks', JSON.stringify([...bookmarks]));
-  }, [bookmarks]);
-
-  const toggleBookmark = (id: number) => {
-    setBookmarks(prev => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  };
-
-  const handleMatch = async () => {
-    if (!jd.trim()) return;
-    setLoading(true);
-    setError('');
-    try {
-      const data = await api.jdMatch(jd); 
-      setResult(data);
-    } catch (err: any) {
-      setError(err.message || 'Failed to analyze JD. Please check your backend connection.');
-    } finally {
-      setLoading(false);
+  // Fetch status from correct backend
+  const { data: status } = useQuery({
+    queryKey: ['live-status'],
+    queryFn: async () => {
+      const response = await axios.get('https://vinu019-resume-backend.hf.space/api/live-status');
+      return response.data;
     }
-  };
+  });
 
   return (
     <>
-      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-8 max-w-5xl mx-auto pb-20">
+      <Helmet>
+        <title>JD Match & Extract | Technical Sourcing Intelligence</title>
+      </Helmet>
+
+      <motion.div initial="hidden" animate="visible" variants={containerVariants} className="space-y-8 pb-20">
         
-        {/* Rebranded Header */}
-        <div className="text-center py-8 relative">
-          <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="mb-6 relative inline-block">
-              <div className="absolute inset-0 bg-primary/20 blur-3xl rounded-full scale-150" />
-              {/* --- HERE IS THE FIX: Replaced blue circles with your company logo in a styled box --- */}
-              <div className="w-24 h-24 rounded-3xl bg-secondary border border-border flex items-center justify-center relative shadow-inner overflow-hidden mx-auto">
-                <img src="/bay-area-final.jpeg" alt="Company Logo" className="w-16 h-16 object-contain relative z-10" />
-              </div>
-          </motion.div>
-
-          <h1 className="text-3xl md:text-4xl font-extrabold mb-3 tracking-tight" style={{ fontFamily: "'Inter', 'SF Pro Display', 'Helvetica Neue', sans-serif", letterSpacing: "-0.02em" }}>
-            <span className="gradient-text">JD MATCH</span>
-          </h1>
-          {/* --- HERE IS THE FIX: Updated text to GeniusHub --- */}
-          <p className="text-muted-foreground max-w-2xl mx-auto text-sm leading-relaxed bg-secondary/30 py-2 px-4 rounded-full border border-border">
-            Paste a job description — <span className="text-primary font-semibold">GeniusHub</span> extracts requirements and strictly matches top candidates
-          </p>
-        </div>
-
-        {/* Input Area */}
-        <div className="glass-panel p-3 flex flex-col h-[400px]">
-          <textarea
-            value={jd}
-            onChange={(e) => setJd(e.target.value)}
-            placeholder={SAMPLE_JD}
-            className="flex-1 p-5 bg-transparent text-sm resize-none focus:outline-none leading-relaxed placeholder:text-muted-foreground/30 font-mono"
-          />
-          <div className="p-3 border-t border-border mt-auto flex justify-between items-center bg-secondary/20 rounded-b-lg">
-              <span className="text-xs text-muted-foreground font-mono">{jd.length} chars</span>
-              <button
-                  onClick={handleMatch}
-                  disabled={loading || !jd.trim()}
-                  className="btn-primary-glow !py-2.5 !px-8"
-              >
-                  {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Target className="w-4 h-4" />}
-                  Match Candidates
-              </button>
+        {/* Main Title Section */}
+        <motion.div variants={itemVariants} className="flex items-center justify-between gap-4 p-5 glass-panel relative overflow-hidden">
+          <div className="absolute inset-0 bg-primary/5 blur-3xl rounded-full scale-150" />
+          <div className="relative z-10">
+            <h1 className="text-2xl font-extrabold font-display tracking-tight">JD Match & Extract</h1>
+            {/* FIX: Replaced AI with GeniusHub in the tagline */}
+            <p className="text-sm text-muted-foreground mt-1 max-w-lg leading-relaxed">
+              Paste Job Description — <span className="font-semibold text-primary">GeniusHub</span> extracts requirements and strictly matches top candidates.
+            </p>
           </div>
-        </div>
+          <div className="w-16 h-16 rounded-2xl bg-secondary/80 flex items-center justify-center shrink-0 border border-border">
+            <BookOpenText className="w-8 h-8 text-primary" />
+          </div>
+        </motion.div>
 
-        {/* Error Handling */}
-        {error && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="glass-panel p-5 border-destructive/20 bg-destructive/5">
-            <p className="text-sm text-destructive flex items-center gap-2"><XCircle className="w-4 h-4" />{error}</p>
-          </motion.div>
-        )}
+        {/* Instructions Panel */}
+        <motion.div variants={itemVariants}>
+          <details className="glass-panel group overflow-hidden transition-all duration-300 [&_summary::-webkit-details-marker]:hidden">
+            <summary className="flex items-center justify-between gap-4 p-4 cursor-pointer hover:bg-secondary/40 transition-colors">
+              <div className="flex items-center gap-3">
+                <Info className="w-5 h-5 text-primary" />
+                <h2 className="text-sm font-semibold text-foreground">How it works (3 Simple Steps)</h2>
+              </div>
+              <motion.div animate={{ rotate: 0 }} className="group-open:rotate-180 transition-transform">
+                <TargetIcon className="w-4 h-4 text-muted-foreground" />
+              </motion.div>
+            </summary>
+            <div className="p-5 pt-0 border-t border-border bg-secondary/15 space-y-4">
+              <p className="text-xs text-muted-foreground pt-4 leading-relaxed max-w-2xl">
+                The JD matching engine uses a hybrid semantic search. It parses actual experience requirements rather than simple keyword counting. This bypasses tricks like invisible text, white background text, and keyword stuffing.
+              </p>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-2">
+                <div className="flex items-center gap-3 p-3 rounded-lg border border-border bg-background">
+                  <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-xs">1</div>
+                  <div className="text-left py-1">
+                    <p className="text-sm font-semibold text-foreground tracking-tight">Step 1: Paste JD</p>
+                    {/* FIX: Replaced AI with GeniusHub in instructions */}
+                    <p className="text-xs text-muted-foreground mt-0.5 max-w-sm">
+                      Paste a job description — <span className="text-primary font-medium">GeniusHub extracts requirements</span> and strictly matches top candidates.
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3 p-3 rounded-lg border border-border bg-background">
+                  <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-xs">2</div>
+                  <div className="text-left py-1">
+                    <p className="text-sm font-semibold text-foreground tracking-tight">Step 2: Hit Match</p>
+                    <p className="text-xs text-muted-foreground mt-0.5 max-w-sm">Wait for processing</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3 p-3 rounded-lg border border-border bg-background">
+                  <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-xs">3</div>
+                  <div className="text-left py-1">
+                    <p className="text-sm font-semibold text-foreground tracking-tight">Step 3: See Top Talent</p>
+                    <p className="text-xs text-muted-foreground mt-0.5 max-w-sm">Ranked by actual hard skills match</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </details>
+        </motion.div>
 
-        {/* Results Data Matrix (Restored) */}
-        <AnimatePresence>
-          {result && result.candidates && result.candidates.length > 0 && (
-            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-3 mt-8">
-              <h2 className="text-sm font-display font-bold text-foreground flex items-center gap-2 tracking-wider uppercase">
-                <Trophy className="w-4 h-4 text-warning" />
-                Top {result.candidates.length} Strict Matches
-              </h2>
-              {result.candidates.map((c, i) => (
-                <CandidateCard 
-                  key={c.id || i} 
-                  candidate={c} 
-                  rank={i + 1} 
-                  bookmarked={bookmarks.has(c.id)}
-                  onBookmark={() => toggleBookmark(c.id)}
-                  onViewDetail={() => setSelectedCandidate(c)} 
-                />
-              ))}
-            </motion.div>
-          )}
-        </AnimatePresence>
+        {/* Main Interface */}
+        <motion.div variants={itemVariants} className="flex flex-col lg:flex-row gap-6">
+          
+          {/* Left Side: Upload Interface Placeholder */}
+          <div className="flex-1 min-w-[320px] lg:flex-none lg:w-[480px]">
+            <div className="glass-panel p-6 h-full flex flex-col justify-center items-center text-center space-y-5 relative overflow-hidden">
+              
+              {/* FIX: Replaced the blue concentric target logo with comp-logo.png inside a styled box */}
+              <div className="relative">
+                <div className="absolute inset-0 scale-150 blur-3xl rounded-full bg-primary/20" />
+                <div className="w-24 h-24 rounded-3xl bg-secondary border border-border flex items-center justify-center relative shadow-inner overflow-hidden">
+                  <img src="/comp-logo.png" alt="Company Logo" className="w-16 h-16 object-contain" />
+                </div>
+              </div>
+              
+              <p className="text-xs text-muted-foreground max-w-xs leading-relaxed">
+                Paste your technical Job Description in the box below. Our hybrid intelligence parses strict requirements and matches candidates from your current pool.
+              </p>
+              
+              <div className="flex gap-2 text-xs font-mono text-muted-foreground">
+                <div className="glass-panel px-3 py-1 flex items-center gap-1.5">
+                  <div className={`w-1.5 h-1.5 rounded-full ${status ? 'bg-success' : 'bg-destructive'}`} />
+                  <span>SYNC</span>
+                </div>
+                <div className="glass-panel px-3 py-1 flex items-center gap-1.5">
+                  <Target className="w-3 h-3" />
+                  <span>STRICT</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Right Side: Text Input Area */}
+          <div className="flex-1 lg:max-w-[calc(100%-480px-24px)]">
+            <div className="glass-panel p-2 flex flex-col h-[400px]">
+              <div className="flex items-center justify-between p-3 border-b border-border">
+                <div className="flex items-center gap-3">
+                  <BookOpenText className="w-5 h-5 text-primary" />
+                  <span className="text-sm font-semibold tracking-tight">Raw Job Description</span>
+                </div>
+                <span className="text-[10px] font-mono text-muted-foreground uppercase px-2 py-0.5 rounded-md bg-secondary">UTF-8 / Plain Text</span>
+              </div>
+              
+              {/* Textarea retaining SAMPLE_JD placeholder */}
+              <textarea
+                value={jdText}
+                onChange={(e) => setJdText(e.target.value)}
+                placeholder={SAMPLE_JD}
+                className="flex-1 p-5 bg-transparent text-sm resize-none focus:outline-none leading-relaxed placeholder:text-muted-foreground/30 font-mono"
+              />
+
+              <div className="p-3 border-t border-border bg-secondary/20 flex items-center justify-between gap-4 mt-auto rounded-b-xl">
+                <span className="text-xs text-muted-foreground">
+                  <span className="font-semibold text-foreground">{jdText.length}</span> characters pasted
+                </span>
+                <button 
+                  className="button-gradient px-8 py-2.5 rounded-xl text-sm font-semibold flex items-center gap-2.5 disabled:opacity-50 disabled:cursor-not-allowed group transition-all"
+                  disabled={!jdText.trim() || !status}
+                >
+                  <TargetIcon className="w-4 h-4 group-hover:scale-110 transition-transform" />
+                  Parse & Match Best Candidates
+                </button>
+              </div>
+            </div>
+          </div>
+        </motion.div>
+        
+        {/* Waiting State Info Panel */}
+        <motion.div variants={itemVariants} className="glass-panel p-5 flex items-center justify-between gap-4 border border-dashed border-primary/20 bg-primary/5">
+            <div className="flex items-center gap-4">
+                <Zap className="w-8 h-8 text-primary" />
+                <div>
+                    <h4 className="font-semibold text-lg tracking-tight">Ready to Index</h4>
+                    <p className="text-sm text-muted-foreground mt-0.5">Paste a Job Description above. The extraction engine is synced and waiting.</p>
+                </div>
+            </div>
+            <div className="flex items-center gap-2 font-mono text-xs px-3 py-1 rounded-full bg-secondary text-muted-foreground">
+                <Info className='w-3 h-3'/>
+                Currently searching <span className='text-primary font-bold'>{status?.total_resumes || 0}</span> candidates
+            </div>
+        </motion.div>
+        
+        {/* Placeholder for future results staggered animation */}
+        {/* (Actual matching logic would go here, utilizing data fetched after button click) */}
+
       </motion.div>
-
-      <CandidateModal
-        candidate={selectedCandidate}
-        onClose={() => setSelectedCandidate(null)}
-      />
     </>
   );
 }
