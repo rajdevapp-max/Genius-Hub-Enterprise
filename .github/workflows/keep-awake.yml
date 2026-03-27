@@ -1,0 +1,18 @@
+name: Keep Demos Awake
+
+on:
+  schedule:
+    # Runs every 30 minutes to prevent the 48-hour sleep cycle
+    - cron: '*/30 * * * *'
+  workflow_dispatch: 
+
+jobs:
+  ping-servers:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping TCS Demo
+        run: curl -s https://vinu019-demo-tcs.hf.space/api/live-status
+        
+      # When you make demo-wipro, you just remove the # hashtags below!
+      # - name: Ping Wipro Demo
+      #   run: curl -s https://vinu019-demo-wipro.hf.space/api/live-status
