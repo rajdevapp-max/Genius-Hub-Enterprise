@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Loader2, Zap, Trophy, XCircle, BookOpenText, Info, Target as TargetIcon } from 'lucide-react';
+import { Loader2, Trophy, XCircle, BookOpenText, Target as TargetIcon } from 'lucide-react';
 import CandidateCard from '@/components/CandidateCard';
 import CandidateModal from '@/components/CandidateModal';
 import type { JDMatchResponse, Candidate } from '@/lib/types';
@@ -11,12 +11,8 @@ const itemVariants = {
   visible: { y: 0, opacity: 1, transition: { type: 'spring', stiffness: 300, damping: 24 } }
 };
 
-const SAMPLE_JD = `Paste Job Description here... GeniusHub will extract requirements, bypass invisible text, keyword stuffing, and find actual top candidates.
-
-Example requirements to try:
-- Strong proficiency in React, TypeScript, and Node.js
-- 5+ years experience in technical sourcing
-- Experience with AWS and Docker`;
+// FIX 1: Restored your exact original Sample JD!
+const SAMPLE_JD = `We are looking for a Senior Full Stack Developer with 5+ years of experience.\n\nRequirements:\n- Strong proficiency in React, TypeScript, and Node.js\n- Experience with cloud services (AWS/GCP)\n- Knowledge of SQL and NoSQL databases\n- Experience with CI/CD pipelines and Docker\n- Excellent problem-solving skills\n\nNice to have:\n- Experience with microservices architecture\n- Knowledge of GraphQL\n- Contributions to open-source projects`;
 
 export default function JDMatchPage() {
   const [jd, setJd] = useState('');
@@ -24,15 +20,6 @@ export default function JDMatchPage() {
   const [result, setResult] = useState<JDMatchResponse | null>(null);
   const [error, setError] = useState('');
   const [selectedCandidate, setSelectedCandidate] = useState<Candidate | null>(null);
-
-  // NATIVE FETCH: Requires no extra packages, Vercel will pass this!
-  const [status, setStatus] = useState<any>(null);
-  useEffect(() => {
-    fetch('https://vinu019-resume-backend.hf.space/api/live-status')
-      .then(res => res.json())
-      .then(data => setStatus(data))
-      .catch(() => {});
-  }, []);
 
   const [bookmarks, setBookmarks] = useState<Set<number>>(() => {
     try { return new Set(JSON.parse(localStorage.getItem('bookmarks') || '[]')); } catch { return new Set(); }
@@ -71,9 +58,12 @@ export default function JDMatchPage() {
       <div className="text-center py-8 relative">
         <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="mb-6 relative inline-block">
             <div className="absolute inset-0 bg-primary/20 blur-3xl rounded-full scale-150" />
-            <div className="w-24 h-24 rounded-3xl bg-secondary border border-border flex items-center justify-center relative shadow-inner overflow-hidden mx-auto">
-              <img src="/bay-area-final.jpeg" alt="Company Logo" className="w-16 h-16 object-contain relative z-10" />
+            
+            {/* FIX 2: Removed the restrictive grey square! The logo is now wide, clean, and professional */}
+            <div className="relative mx-auto flex justify-center items-center h-20 mb-2">
+              <img src="/bay-area-final.jpeg" alt="Company Logo" className="max-w-[220px] h-full object-contain relative z-10 drop-shadow-2xl rounded-lg" />
             </div>
+            
         </motion.div>
 
         <h1 className="text-3xl md:text-4xl font-extrabold mb-3 tracking-tight" style={{ fontFamily: "'Inter', 'SF Pro Display', 'Helvetica Neue', sans-serif", letterSpacing: "-0.02em" }}>
@@ -96,13 +86,13 @@ export default function JDMatchPage() {
           value={jd}
           onChange={(e) => setJd(e.target.value)}
           placeholder={SAMPLE_JD}
-          className="flex-1 p-5 bg-transparent text-sm resize-none focus:outline-none leading-relaxed placeholder:text-muted-foreground/30 font-mono"
+          className="flex-1 p-5 bg-transparent text-sm resize-none focus:outline-none leading-relaxed placeholder:text-muted-foreground/30 font-mono whitespace-pre-wrap"
         />
         <div className="p-3 border-t border-border mt-auto flex justify-between items-center bg-secondary/20 rounded-b-lg">
             <span className="text-xs text-muted-foreground font-mono">{jd.length} chars</span>
             <button
                 onClick={handleMatch}
-                disabled={loading || !status}
+                disabled={loading || !jd.trim()}
                 className="btn-primary-glow !py-2.5 !px-8"
             >
                 {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <TargetIcon className="w-4 h-4" />}
@@ -111,19 +101,7 @@ export default function JDMatchPage() {
         </div>
       </div>
 
-      <motion.div variants={itemVariants} className="glass-panel p-5 flex items-center justify-between gap-4 border border-dashed border-primary/20 bg-primary/5">
-          <div className="flex items-center gap-4">
-              <Zap className="w-8 h-8 text-primary" />
-              <div>
-                  <h4 className="font-semibold text-lg tracking-tight">Ready to Index</h4>
-                  <p className="text-sm text-muted-foreground mt-0.5">Paste a Job Description above. The extraction engine is synced and waiting.</p>
-              </div>
-          </div>
-          <div className="flex items-center gap-2 font-mono text-xs px-3 py-1 rounded-full bg-secondary text-muted-foreground">
-              <Info className='w-3 h-3'/>
-              Currently searching <span className='text-primary font-bold'>{status?.total_resumes || 0}</span> candidates
-          </div>
-      </motion.div>
+      {/* FIX 3: The "Ready to Index" bar and 37K candidate count has been completely erased from existence! */}
 
       {error && (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="glass-panel p-5 border-destructive/20 bg-destructive/5">
