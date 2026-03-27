@@ -6,8 +6,8 @@ import { ThemeToggle, useTheme } from '@/components/ThemeToggle';
 
 const navItems = [
   { path: '/', label: 'AI Search', icon: Search, customIcon: null, desc: 'Hybrid intelligence' },
-  // FIX: TS-Safe custom icon
-  { path: '/jd-match', label: 'JD Match', icon: FileText, customIcon: <img src="/comp-logo.png" className="w-5 h-5 object-contain" alt="JD Logo" />, desc: 'Job description match' },
+  // FIX: Using the already-working bay-area-final image for JD Match
+  { path: '/jd-match', label: 'JD Match', icon: FileText, customIcon: <img src="/bay-area-final.jpeg" className="w-5 h-5 object-contain" alt="JD Logo" />, desc: 'Job description match' },
   { path: '/analytics', label: 'Analytics', icon: BarChart3, customIcon: null, desc: 'Real-time dashboard' },
   { path: '/upload', label: 'Upload', icon: Upload, customIcon: null, desc: 'Add resumes' },
 ];

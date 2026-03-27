@@ -75,10 +75,11 @@ export default function JDMatchPage() {
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-8 max-w-5xl mx-auto pb-20">
         
         <div className="text-center py-8 relative">
-          <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="mb-6 relative inline-block">
+        <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="mb-6 relative inline-block">
               <div className="absolute inset-0 bg-primary/20 blur-3xl rounded-full scale-150" />
+              {/* FIX: Using the already-working bay-area-final image for the Center Logo */}
               <div className="w-24 h-24 rounded-3xl bg-secondary border border-border flex items-center justify-center relative shadow-inner overflow-hidden mx-auto">
-                <img src="/comp-logo.png" alt="Company Logo" className="w-16 h-16 object-contain relative z-10" />
+                <img src="/bay-area-final.jpeg" alt="Company Logo" className="w-16 h-16 object-contain relative z-10" />
               </div>
           </motion.div>
 
