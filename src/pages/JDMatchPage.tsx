@@ -1,22 +1,13 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { FileText, Sparkles, Loader2, Target, CheckCircle2, XCircle, FileDown, Trophy, Shield, Zap, AlertTriangle, BookOpenText, Info, Target as TargetIcon } from 'lucide-react';
+import { Loader2, Zap, Trophy, XCircle, BookOpenText, Info, Target as TargetIcon } from 'lucide-react';
 import CandidateCard from '@/components/CandidateCard';
 import CandidateModal from '@/components/CandidateModal';
-import GlowingCard from '@/components/GlowingCard';
 import type { JDMatchResponse, Candidate } from '@/lib/types';
 import { api } from '@/lib/api';
 import { useQuery } from '@tanstack/react-query';
 import axios from 'axios';
 import { Helmet } from 'react-helmet-async';
-
-const containerVariants = {
-  hidden: { opacity: 0 },
-  visible: { 
-    opacity: 1,
-    transition: { staggerChildren: 0.1, delayChildren: 0.2 }
-  }
-};
 
 const itemVariants = {
   hidden: { y: 20, opacity: 0 },
@@ -83,11 +74,9 @@ export default function JDMatchPage() {
       </Helmet>
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-8 max-w-5xl mx-auto pb-20">
         
-        {/* Rebranded Header */}
         <div className="text-center py-8 relative">
           <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="mb-6 relative inline-block">
               <div className="absolute inset-0 bg-primary/20 blur-3xl rounded-full scale-150" />
-              {/* FIX: Center Logo strictly set to comp-logo.png */}
               <div className="w-24 h-24 rounded-3xl bg-secondary border border-border flex items-center justify-center relative shadow-inner overflow-hidden mx-auto">
                 <img src="/comp-logo.png" alt="Company Logo" className="w-16 h-16 object-contain relative z-10" />
               </div>
@@ -101,7 +90,6 @@ export default function JDMatchPage() {
           </p>
         </div>
 
-        {/* Input Area */}
         <div className="glass-panel p-3 flex flex-col h-[400px]">
           <div className="flex items-center justify-between p-3 border-b border-border">
             <div className="flex items-center gap-3">
@@ -129,7 +117,6 @@ export default function JDMatchPage() {
           </div>
         </div>
 
-        {/* Results Info Panel */}
         <motion.div variants={itemVariants} className="glass-panel p-5 flex items-center justify-between gap-4 border border-dashed border-primary/20 bg-primary/5">
             <div className="flex items-center gap-4">
                 <Zap className="w-8 h-8 text-primary" />
@@ -144,14 +131,12 @@ export default function JDMatchPage() {
             </div>
         </motion.div>
 
-        {/* Error Handling */}
         {error && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="glass-panel p-5 border-destructive/20 bg-destructive/5">
             <p className="text-sm text-destructive flex items-center gap-2"><XCircle className="w-4 h-4" />{error}</p>
           </motion.div>
         )}
 
-        {/* Results Data Matrix */}
         <AnimatePresence>
           {result && result.candidates && result.candidates.length > 0 && (
             <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-3 mt-8">

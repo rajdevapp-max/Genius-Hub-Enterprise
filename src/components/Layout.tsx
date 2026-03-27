@@ -5,11 +5,11 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { ThemeToggle, useTheme } from '@/components/ThemeToggle';
 
 const navItems = [
-  { path: '/', label: 'AI Search', icon: Search, desc: 'Hybrid intelligence' },
-  // FIX: Using comp-logo.png ONLY for JD Match
-  { path: '/jd-match', label: 'JD Match', customIcon: <img src="/comp-logo.png" className="w-5 h-5 object-contain" alt="JD Logo" />, desc: 'Job description match' },
-  { path: '/analytics', label: 'Analytics', icon: BarChart3, desc: 'Real-time dashboard' },
-  { path: '/upload', label: 'Upload', icon: Upload, desc: 'Add resumes' },
+  { path: '/', label: 'AI Search', icon: Search, customIcon: null, desc: 'Hybrid intelligence' },
+  // FIX: TS-Safe custom icon
+  { path: '/jd-match', label: 'JD Match', icon: FileText, customIcon: <img src="/comp-logo.png" className="w-5 h-5 object-contain" alt="JD Logo" />, desc: 'Job description match' },
+  { path: '/analytics', label: 'Analytics', icon: BarChart3, customIcon: null, desc: 'Real-time dashboard' },
+  { path: '/upload', label: 'Upload', icon: Upload, customIcon: null, desc: 'Add resumes' },
 ];
 
 export default function Layout({ children }: { children: React.ReactNode }) {
@@ -24,7 +24,6 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         className="fixed left-0 top-0 bottom-0 z-40 flex flex-col border-r border-sidebar-border bg-sidebar overflow-hidden"
         style={{ boxShadow: '4px 0 30px hsl(var(--background) / 0.5)' }}
       >
-        {/* Top Left Logo Section */}
         <div className="flex items-center gap-3 px-4 h-16 border-b border-sidebar-border shrink-0">
           <motion.div
             whileHover={{ scale: 1.05 }}
@@ -48,7 +47,6 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           </button>
         </div>
 
-        {/* Nav */}
         <nav className="flex-1 py-4 px-2.5 space-y-1">
           {navItems.map(({ path, label, icon: Icon, desc, customIcon }) => {
             const active = location.pathname === path;
@@ -57,9 +55,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                 key={path}
                 to={path}
                 className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-300 relative group ${
-                  active
-                    ? 'text-primary'
-                    : 'text-muted-foreground hover:text-foreground hover:bg-secondary/60'
+                  active ? 'text-primary' : 'text-muted-foreground hover:text-foreground hover:bg-secondary/60'
                 }`}
               >
                 {active && (
@@ -74,7 +70,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                 <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 transition-all relative z-10 ${
                   active ? 'bg-primary/15' : 'bg-secondary/40 group-hover:bg-secondary'
                 }`}>
-                  {customIcon ? customIcon : (Icon && <Icon className="w-4 h-4" />)}
+                  {customIcon ? customIcon : <Icon className="w-4 h-4" />}
                 </div>
 
                 <AnimatePresence>
@@ -90,7 +86,6 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           })}
         </nav>
 
-        {/* Footer */}
         <div className="p-3 border-t border-sidebar-border space-y-2">
           <div className="flex items-center justify-center">
             <ThemeToggle theme={theme} toggle={toggle} />
