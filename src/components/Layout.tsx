@@ -6,7 +6,10 @@ import { ThemeToggle, useTheme } from '@/components/ThemeToggle';
 
 const navItems = [
   { path: '/', label: 'AI Search', icon: Search, desc: 'Hybrid intelligence' },
-  { path: '/jd-match', label: 'JD Match', icon: FileText, desc: 'Job description match' },
+  
+  // --- FIX: UPDATED THIS LINE TO USE COMP-LOGO ---
+  { path: '/jd-match', label: 'JD Match', customIcon: <img src="/comp-logo.png" className="w-5 h-5 object-contain" />, desc: 'Job description match' },
+  
   { path: '/analytics', label: 'Analytics', icon: BarChart3, desc: 'Real-time dashboard' },
   { path: '/upload', label: 'Upload', icon: Upload, desc: 'Add resumes' },
 ];
@@ -49,7 +52,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
         {/* Nav */}
         <nav className="flex-1 py-4 px-2.5 space-y-1">
-          {navItems.map(({ path, label, icon: Icon, desc }) => {
+        {navItems.map(({ path, label, icon: Icon, desc, customIcon }) => {
             const active = location.pathname === path;
             return (
               <Link
@@ -69,11 +72,13 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                     transition={{ type: 'spring', stiffness: 400, damping: 30 }}
                   />
                 )}
-                <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 transition-all relative z-10 ${
-                  active ? 'bg-primary/15' : 'bg-secondary/40 group-hover:bg-secondary'
-                }`}>
-                  <Icon className="w-4 h-4" />
-                </div>
+                // Inside the navItems.map loop in Layout.tsx
+<div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 transition-all relative z-10 ${
+  active ? 'bg-primary/15' : 'bg-secondary/40 group-hover:bg-secondary'
+}`}>
+  {/* FIX: Render the customIcon (the logo) instead of the standard Lucide Icon component */}
+  {customIcon ? customIcon : (Icon && <Icon className="w-4 h-4" />)}
+</div>
                 <AnimatePresence>
                   {!collapsed && (
                     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="min-w-0 relative z-10">
