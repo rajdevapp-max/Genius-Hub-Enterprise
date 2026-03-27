@@ -11,7 +11,7 @@ const itemVariants = {
   visible: { y: 0, opacity: 1, transition: { type: 'spring', stiffness: 300, damping: 24 } }
 };
 
-// FIX 1: Restored your exact original Sample JD!
+// FULL ORIGINAL SAMPLE JD RESTORED
 const SAMPLE_JD = `We are looking for a Senior Full Stack Developer with 5+ years of experience.\n\nRequirements:\n- Strong proficiency in React, TypeScript, and Node.js\n- Experience with cloud services (AWS/GCP)\n- Knowledge of SQL and NoSQL databases\n- Experience with CI/CD pipelines and Docker\n- Excellent problem-solving skills\n\nNice to have:\n- Experience with microservices architecture\n- Knowledge of GraphQL\n- Contributions to open-source projects`;
 
 export default function JDMatchPage() {
@@ -59,7 +59,7 @@ export default function JDMatchPage() {
         <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="mb-6 relative inline-block">
             <div className="absolute inset-0 bg-primary/20 blur-3xl rounded-full scale-150" />
             
-            {/* FIX 2: Removed the restrictive grey square! The logo is now wide, clean, and professional */}
+            {/* WIDE LOGO WITHOUT THE RESTRICTIVE GREY BOX */}
             <div className="relative mx-auto flex justify-center items-center h-20 mb-2">
               <img src="/bay-area-final.jpeg" alt="Company Logo" className="max-w-[220px] h-full object-contain relative z-10 drop-shadow-2xl rounded-lg" />
             </div>
@@ -82,12 +82,15 @@ export default function JDMatchPage() {
           </div>
           <span className="text-[10px] font-mono text-muted-foreground uppercase px-2 py-0.5 rounded-md bg-secondary">UTF-8 / Plain Text</span>
         </div>
+        
+        {/* TEXTAREA WITH RESTORED SAMPLE JD */}
         <textarea
           value={jd}
           onChange={(e) => setJd(e.target.value)}
           placeholder={SAMPLE_JD}
           className="flex-1 p-5 bg-transparent text-sm resize-none focus:outline-none leading-relaxed placeholder:text-muted-foreground/30 font-mono whitespace-pre-wrap"
         />
+        
         <div className="p-3 border-t border-border mt-auto flex justify-between items-center bg-secondary/20 rounded-b-lg">
             <span className="text-xs text-muted-foreground font-mono">{jd.length} chars</span>
             <button
@@ -101,14 +104,14 @@ export default function JDMatchPage() {
         </div>
       </div>
 
-      {/* FIX 3: The "Ready to Index" bar and 37K candidate count has been completely erased from existence! */}
-
+      {/* ERROR HANDLING */}
       {error && (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="glass-panel p-5 border-destructive/20 bg-destructive/5">
           <p className="text-sm text-destructive flex items-center gap-2"><XCircle className="w-4 h-4" />{error}</p>
         </motion.div>
       )}
 
+      {/* RESULTS SECTION RESTORED */}
       <AnimatePresence>
         {result && result.candidates && result.candidates.length > 0 && (
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-3 mt-8">
