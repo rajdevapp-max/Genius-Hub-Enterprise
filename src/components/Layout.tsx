@@ -34,7 +34,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           <AnimatePresence>
             {!collapsed && (
               <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="overflow-hidden whitespace-nowrap">
-                <h1 className="text-xs font-bold font-display tracking-wider text-foreground">BATS GeniusHub</h1>
+                <h1 className="text-sm font-extrabold tracking-wide text-foreground" style={{ fontFamily: "'Inter', 'SF Pro Display', 'Helvetica Neue', sans-serif" }}>BATS GeniusHub</h1>
                 <p className="text-[9px] text-muted-foreground tracking-wide">INTELLIGENCE v6.0</p>
               </motion.div>
             )}

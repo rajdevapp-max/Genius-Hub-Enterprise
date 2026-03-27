@@ -155,9 +155,9 @@ export default function SearchPage() {
     <>
       <motion.div variants={containerVariants} initial="hidden" animate="visible" className="space-y-8 pb-20">
       <motion.div variants={itemVariants} className="text-center py-6">
-          <h1 className="text-3xl md:text-4xl font-extrabold font-display mb-2 tracking-tight">
-            <span className="gradient-text">BATS GeniusHub</span>
-          </h1>
+      <h1 className="text-3xl md:text-4xl font-extrabold mb-2 tracking-tight" style={{ fontFamily: "'Inter', 'SF Pro Display', 'Helvetica Neue', sans-serif", letterSpacing: "-0.02em" }}>
+  <span className="gradient-text">BATS GeniusHub</span>
+</h1>
           <p className="text-muted-foreground max-w-lg mx-auto text-sm leading-relaxed mb-4">
             Precision Sourcing for tech talent
           </p>
