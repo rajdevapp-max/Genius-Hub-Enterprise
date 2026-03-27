@@ -15,4 +15,4 @@ jobs:
         
       # When you make demo-wipro, you just remove the # hashtags below!
       # - name: Ping Wipro Demo
-      #   run: curl -s https://vinu019-demo-wipro.hf.space/api/live-status
+      #   run: curl -s https://vinu019-demo-BATS.hf.space/api/live-status
