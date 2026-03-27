@@ -29,7 +29,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             whileHover={{ scale: 1.05 }}
             className="w-9 h-9 flex items-center justify-center shrink-0 overflow-hidden rounded-md bg-white"
           >
-            <img src="/bats-logo.jpg" alt="BATS Logo" className="w-full h-full object-contain" />
+            <img src="/bay-area-final.jpeg" alt="BATS Logo" className="w-full h-full object-contain" />
           </motion.div>
           <AnimatePresence>
             {!collapsed && (
