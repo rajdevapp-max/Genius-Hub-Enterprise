@@ -1,8 +1,16 @@
 import type { SearchRequest, SearchResponse, JDMatchRequest, JDMatchResponse, StatsResponse, UploadResponse, LiveStatus, Candidate } from './types';
 
-const API_BASE = import.meta.env.VITE_API_URL || 'https://vinu019-resume-backend.hf.space';
+// --- THE INFINITE DEMO ROUTER ---
+const params = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : new URLSearchParams();
+const demoBackend = params.get('demo'); // Grabs the company name from the URL
+
+// If it's a demo link, point to the 0-resume demo backend. Otherwise, use the 37K Production backend!
+const API_BASE = demoBackend 
+  ? `https://vinu019-${demoBackend}.hf.space` 
+  : (import.meta.env.VITE_API_URL || 'https://vinu019-resume-backend.hf.space');
 
 async function apiFetch<T>(endpoint: string, options?: RequestInit): Promise<T> {
+// ... (leave the rest of the file exactly as it is)
   const res = await fetch(`${API_BASE}${endpoint}`, {
     headers: { 'Content-Type': 'application/json' },
     ...options,

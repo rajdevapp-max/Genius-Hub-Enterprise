@@ -569,9 +569,10 @@ def live_status():
 async def upload_resume(file: UploadFile = File(...)):
     path = os.path.join(RESUME_DIR, file.filename)
     content = await file.read()
-    with open(path, "wb") as f: f.write(content)
-    try: return {"message": "Processed", "data": process_resume(path)}
-    except Exception as e: raise HTTPException(500, str(e))
+    with open(path, "wb") as f: 
+        f.write(content)
+    # The Watcher Thread will instantly detect this file and process it in the background safely.
+    return {"message": "File received. AI is processing in the background.", "data": {"id": 0, "name": file.filename}}
 
 @app.post("/api/upload-batch")
 async def upload_batch(files: list[UploadFile] = File(...)):
@@ -579,9 +580,11 @@ async def upload_batch(files: list[UploadFile] = File(...)):
     for file in files:
         path = os.path.join(RESUME_DIR, file.filename)
         content = await file.read()
-        with open(path, "wb") as f: f.write(content)
-        saved.append(path)
-    return {"message": f"Processed batch", "results": batch_process(saved)}
+        with open(path, "wb") as f: 
+            f.write(content)
+        saved.append({"name": file.filename})
+    # Prevents Vercel 10-second timeout. The Watcher will index all 100 resumes autonomously.
+    return {"message": f"Successfully received {len(saved)} resumes. Engine is extracting data.", "results": saved}
 
 @app.get("/api/resumes/{filename}")
 def download_resume(filename: str): return FileResponse(os.path.join(RESUME_DIR, filename), filename=filename)
