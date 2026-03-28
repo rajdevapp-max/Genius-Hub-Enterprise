@@ -83,7 +83,6 @@ export default function SearchPage() {
     }
   };
 
-  // --- NEW RESET FUNCTION ---
   const handleReset = () => {
     setQuery('');
     setMinExp(0);
@@ -153,11 +152,30 @@ export default function SearchPage() {
 
   return (
     <>
-      <motion.div variants={containerVariants} initial="hidden" animate="visible" className="space-y-8 pb-20">
-      <motion.div variants={itemVariants} className="text-center py-6">
-      <h1 className="text-3xl md:text-4xl font-extrabold mb-2 tracking-tight" style={{ fontFamily: "'Inter', 'SF Pro Display', 'Helvetica Neue', sans-serif", letterSpacing: "-0.02em" }}>
-  <span className="gradient-text">BATS GeniusHub</span>
-</h1>
+      {/* 🌟 NEW: CINEMATIC BACKGROUND WATERMARK 🌟 */}
+      <div className="fixed inset-0 pointer-events-none flex items-center justify-center z-[0] overflow-hidden">
+        <motion.div
+          animate={{ scale: [1, 1.05, 1], opacity: [0.03, 0.08, 0.03] }}
+          transition={{ duration: 10, repeat: Infinity, ease: "easeInOut" }}
+          className="w-[90vw] max-w-[1200px] aspect-square flex items-center justify-center"
+        >
+          <motion.img 
+            animate={{ rotate: 360 }}
+            transition={{ duration: 150, repeat: Infinity, ease: "linear" }}
+            src="/comp-logo.PNG" 
+            alt="Watermark" 
+            className="w-full h-full object-contain filter drop-shadow-[0_0_100px_rgba(56,189,248,0.2)]" 
+          />
+        </motion.div>
+      </div>
+
+      {/* MAIN CONTENT CONTAINER (z-10 ensures it stays above the watermark) */}
+      <motion.div variants={containerVariants} initial="hidden" animate="visible" className="relative z-10 space-y-8 pb-20">
+        
+        <motion.div variants={itemVariants} className="text-center py-6">
+          <h1 className="text-3xl md:text-4xl font-extrabold mb-2 tracking-tight" style={{ fontFamily: "'Inter', 'SF Pro Display', 'Helvetica Neue', sans-serif", letterSpacing: "-0.02em" }}>
+            <span className="gradient-text">BATS GeniusHub</span>
+          </h1>
           <p className="text-muted-foreground max-w-lg mx-auto text-sm leading-relaxed mb-4">
             Precision Sourcing for tech talent
           </p>
@@ -229,7 +247,6 @@ export default function SearchPage() {
               >
                 <div className="glass-panel p-6 border border-primary/20 shadow-[0_0_30px_rgba(var(--primary-rgb),0.1)]">
                   
-                  {/* --- NEW SKILLS ALIGNMENT --- */}
                   <div className="mb-5">
                     <h3 className="text-xs font-display font-bold text-primary uppercase tracking-widest flex items-center gap-2 mb-4">
                       <Brain className="w-4 h-4" /> AI Semantic Skills
@@ -248,7 +265,6 @@ export default function SearchPage() {
 
                   <div className="w-full h-px bg-border my-5" />
 
-                  {/* --- NEW LOCATION & EXPERIENCE ALIGNMENT --- */}
                   <div>
                     <h3 className="text-xs font-display font-bold text-primary uppercase tracking-widest flex items-center gap-2 mb-4">
                       <SlidersHorizontal className="w-4 h-4" /> Logistics & Experience
@@ -400,4 +416,3 @@ export default function SearchPage() {
     </>
   );
 }
-
