@@ -1,18 +1,21 @@
-name: Keep Demos Awake
+name: Keep HF Backends Awake
 
 on:
   schedule:
-    # Runs every 30 minutes to prevent the 48-hour sleep cycle
-    - cron: '*/30 * * * *'
-  workflow_dispatch: 
+    - cron: "*/10 * * * *" # Runs every 10 minutes automatically
+  workflow_dispatch: # Allows you to trigger it manually
 
 jobs:
-  ping-servers:
+  ping:
     runs-on: ubuntu-latest
     steps:
-      - name: Ping TCS Demo
-        run: curl -s https://vinu019-demo-tcs.hf.space/api/live-status
-        
-      # When you make demo-wipro, you just remove the # hashtags below!
-      # - name: Ping Wipro Demo
-      #   run: curl -s https://vinu019-demo-BATS.hf.space/api/live-status
+      - name: Ping Original 37k Backend
+        run: |
+          curl -s https://vinu019-resume-backend.hf.space/api/live-status > /dev/null
+          echo "Successfully pinged Original backend!"
+
+      - name: Ping Demo Backend
+        run: |
+          # BRO: REPLACE THE URL BELOW WITH YOUR ACTUAL DEMO BACKEND URL!
+          curl -s https://YOUR-DEMO-BACKEND-URL.hf.space/api/live-status > /dev/null
+          echo "Successfully pinged Demo backend!"
