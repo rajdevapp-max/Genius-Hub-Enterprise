@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Search, FileText, BarChart3, Upload, Brain, Menu, X } from 'lucide-react';
+import { Search, FileText, BarChart3, Upload, Menu, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ThemeToggle, useTheme } from '@/components/ThemeToggle';
 
@@ -20,27 +20,29 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     <div className="flex min-h-screen bg-background">
       <motion.aside
         animate={{ width: collapsed ? 68 : 260 }}
-        // --- THE FIX: Dropped Sidebar z-index to 40 so Modals can overlap it ---
         className="fixed left-0 top-0 bottom-0 z-40 flex flex-col border-r border-sidebar-border bg-sidebar overflow-hidden"
         style={{ boxShadow: '4px 0 30px hsl(var(--background) / 0.5)' }}
       >
-        {/* Logo */}
-        <div className="flex items-center gap-3 px-4 h-16 border-b border-sidebar-border shrink-0">
-          <motion.div
-            whileHover={{ rotate: 15, scale: 1.1 }}
-            className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
-            style={{ background: 'linear-gradient(135deg, hsl(var(--neon-blue)), hsl(var(--neon-cyan)))' }}
-          >
-            <Brain className="w-4.5 h-4.5 text-primary-foreground" />
-          </motion.div>
-          <AnimatePresence>
-            {!collapsed && (
-              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="overflow-hidden whitespace-nowrap">
-                <h1 className="text-xs font-bold font-display tracking-wider text-foreground">RESUME AI</h1>
-                <p className="text-[9px] text-muted-foreground tracking-wide">INTELLIGENCE v6.0</p>
-              </motion.div>
-            )}
-          </AnimatePresence>
+        {/* WIDE CLICKABLE LOGO SECTION */}
+        <div className="flex items-center px-4 h-16 border-b border-sidebar-border shrink-0">
+          <Link to="/" className="flex items-center gap-3 shrink-0 overflow-hidden cursor-pointer">
+            <motion.div
+              whileHover={{ rotate: 15, scale: 1.1 }}
+              className="w-9 h-9 flex items-center justify-center shrink-0"
+            >
+              {/* Added the new logo with original hover effects */}
+              <img src="/comp-logo.PNG" alt="BATS Logo" className="w-full h-full object-contain drop-shadow-sm" />
+            </motion.div>
+            <AnimatePresence>
+              {!collapsed && (
+                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="overflow-hidden whitespace-nowrap">
+                  <h1 className="text-xs font-bold font-display tracking-wider text-foreground">BATS GeniusHub</h1>
+                  <p className="text-[9px] text-muted-foreground tracking-wide">INTELLIGENCE v6.0</p>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </Link>
+          
           <button
             onClick={() => setCollapsed(!collapsed)}
             className="ml-auto p-1.5 rounded-lg hover:bg-secondary text-muted-foreground shrink-0 transition-colors"
@@ -103,7 +105,6 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         </div>
       </motion.aside>
 
-      {/* --- THE FIX: Removed z-10 here so it doesn't create a trapped stacking context --- */}
       <main className="flex-1 transition-all duration-300 relative" style={{ marginLeft: collapsed ? 68 : 260 }}>
         <div className="p-6 lg:p-8 max-w-7xl mx-auto">{children}</div>
       </main>
