@@ -7,19 +7,7 @@ import GlowingCard from '@/components/GlowingCard';
 import type { JDMatchResponse, Candidate } from '@/lib/types';
 import { api } from '@/lib/api';
 
-const SAMPLE_JD = `We are looking for a Senior Full Stack Developer with 5+ years of experience.
-
-Requirements:
-- Strong proficiency in React, TypeScript, and Node.js
-- Experience with cloud services (AWS/GCP)
-- Knowledge of SQL and NoSQL databases
-- Experience with CI/CD pipelines and Docker
-- Excellent problem-solving skills
-
-Nice to have:
-- Experience with microservices architecture
-- Knowledge of GraphQL
-- Contributions to open-source projects`;
+const SAMPLE_JD = `We are looking for a Senior Full Stack Developer with 5+ years of experience.\n\nRequirements:\n- Strong proficiency in React, TypeScript, and Node.js\n- Experience with cloud services (AWS/GCP)\n- Knowledge of SQL and NoSQL databases\n- Experience with CI/CD pipelines and Docker\n- Excellent problem-solving skills\n\nNice to have:\n- Experience with microservices architecture\n- Knowledge of GraphQL\n- Contributions to open-source projects`;
 
 export default function JDMatchPage() {
   const [jd, setJd] = useState('');
@@ -28,7 +16,6 @@ export default function JDMatchPage() {
   const [error, setError] = useState('');
   const [selectedCandidate, setSelectedCandidate] = useState<Candidate | null>(null);
 
-  // --- THE FIX: Added Bookmarking State to fix TS error and add functionality ---
   const [bookmarks, setBookmarks] = useState<Set<number>>(() => {
     try { return new Set(JSON.parse(localStorage.getItem('bookmarks') || '[]')); } catch { return new Set(); }
   });
@@ -67,7 +54,25 @@ export default function JDMatchPage() {
 
   return (
     <>
-      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-8 pb-20">
+      {/* 🌟 CINEMATIC BACKGROUND WATERMARK 🌟 */}
+      <div className="fixed inset-0 pointer-events-none flex items-center justify-center z-[0] overflow-hidden">
+        <motion.div
+          animate={{ scale: [1, 1.05, 1], opacity: [0.12, 0.25, 0.12] }}
+          transition={{ duration: 8, repeat: Infinity, ease: "easeInOut" }}
+          className="w-[60vw] max-w-[500px] aspect-square flex items-center justify-center"
+        >
+          <motion.img 
+            animate={{ rotate: 360 }}
+            transition={{ duration: 90, repeat: Infinity, ease: "linear" }}
+            src="/comp-logo.PNG" 
+            alt="Watermark" 
+            className="w-full h-full object-contain filter drop-shadow-[0_0_60px_rgba(56,189,248,0.4)]" 
+          />
+        </motion.div>
+      </div>
+
+      {/* MAIN CONTENT (z-10 keeps it above the watermark) */}
+      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="relative z-10 space-y-8 pb-20">
         
         <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="text-center py-4">
           <motion.div
@@ -117,7 +122,7 @@ export default function JDMatchPage() {
                     </button>
                   </div>
                   <div className="flex flex-wrap gap-1.5 mb-4">
-                    {result.required_skills?.map((s, i) => (
+                    {result.required_skills?.map((s: string, i: number) => (
                       <motion.span key={s} initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ delay: i * 0.03 }} className="skill-tag border border-warning text-warning bg-warning/10">{s}</motion.span>
                     ))}
                   </div>
@@ -134,7 +139,7 @@ export default function JDMatchPage() {
                       <Trophy className="w-3 h-3 text-warning" /> TOP MATCHES
                     </h3>
                     <div className="space-y-2.5">
-                      {result.candidates.slice(0, 5).map((c, i) => {
+                      {result.candidates.slice(0, 5).map((c: any, i: number) => {
                         const isFraud = c.fraud_flag === 1;
                         return (
                           <motion.div key={c.id || i} initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.2 + i * 0.08 }}
@@ -198,12 +203,11 @@ export default function JDMatchPage() {
                 <Trophy className="w-4 h-4 text-warning" />
                 Top {result.candidates.length} Strict Matches
               </h2>
-              {result.candidates.map((c, i) => (
+              {result.candidates.map((c: any, i: number) => (
                 <CandidateCard 
                   key={c.id || i} 
                   candidate={c} 
                   rank={i + 1} 
-                  // --- THE FIX: Passed the missing props here ---
                   bookmarked={bookmarks.has(c.id)}
                   onBookmark={() => toggleBookmark(c.id)}
                   onViewDetail={() => setSelectedCandidate(c)} 
