@@ -186,7 +186,8 @@ export default function AnalyticsPage() {
               <Activity className="w-6 h-6 text-primary-foreground" />
             </motion.div>
             <div>
-              <h1 className="text-2xl font-extrabold font-display text-foreground tracking-wider">MISSION CONTROL</h1>
+              {/* 🎯 THE FIX: Changed to GeniusHub CONTROL */}
+              <h1 className="text-2xl font-extrabold font-display text-foreground tracking-wider">GeniusHub CONTROL</h1>
               <p className="text-[10px] text-primary font-mono tracking-widest flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" /> LIVE TELEMETRY • AUTO-SYNC</p>
             </div>
           </div>
