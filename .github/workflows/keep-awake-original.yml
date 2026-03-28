@@ -1,0 +1,15 @@
+name: Keep Original (37k) Awake
+
+on:
+  schedule:
+    - cron: "*/10 * * * *" 
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping 37k Backend
+        run: |
+          curl -s https://vinu019-resume-backend.hf.space/api/live-status > /dev/null
+          echo "Successfully pinged Original backend!"
