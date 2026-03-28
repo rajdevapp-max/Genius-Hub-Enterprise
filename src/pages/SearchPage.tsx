@@ -155,16 +155,16 @@ export default function SearchPage() {
       {/* 🌟 NEW: CINEMATIC BACKGROUND WATERMARK 🌟 */}
       <div className="fixed inset-0 pointer-events-none flex items-center justify-center z-[0] overflow-hidden">
         <motion.div
-          animate={{ scale: [1, 1.05, 1], opacity: [0.03, 0.08, 0.03] }}
-          transition={{ duration: 10, repeat: Infinity, ease: "easeInOut" }}
-          className="w-[90vw] max-w-[1200px] aspect-square flex items-center justify-center"
+          animate={{ scale: [1, 1.05, 1], opacity: [0.12, 0.25, 0.12] }}
+          transition={{ duration: 8, repeat: Infinity, ease: "easeInOut" }}
+          className="w-[60vw] max-w-[500px] aspect-square flex items-center justify-center"
         >
           <motion.img 
             animate={{ rotate: 360 }}
-            transition={{ duration: 150, repeat: Infinity, ease: "linear" }}
+            transition={{ duration: 90, repeat: Infinity, ease: "linear" }}
             src="/comp-logo.PNG" 
             alt="Watermark" 
-            className="w-full h-full object-contain filter drop-shadow-[0_0_100px_rgba(56,189,248,0.2)]" 
+            className="w-full h-full object-contain filter drop-shadow-[0_0_60px_rgba(56,189,248,0.4)]" 
           />
         </motion.div>
       </div>
