@@ -71,24 +71,27 @@ export default function JDMatchPage() {
         </motion.div>
       </div>
 
-      {/* MAIN CONTENT (z-10 keeps it above the watermark) */}
-      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="relative z-10 space-y-8 pb-20">
+      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-8 pb-20 relative z-10">
         
         <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="text-center py-4">
+          
+          {/* 🎯 CHANGE 1: Top Center Logo with exact same motion */}
           <motion.div
             initial={{ scale: 0, rotate: -180 }}
             animate={{ scale: 1, rotate: 0 }}
             transition={{ type: 'spring', stiffness: 200, delay: 0.1 }}
-            className="w-14 h-14 rounded-2xl flex items-center justify-center mx-auto mb-3 relative glow-ring"
-            style={{ background: 'linear-gradient(135deg, hsl(var(--neon-cyan)), hsl(var(--neon-blue)))' }}
+            className="w-14 h-14 rounded-2xl flex items-center justify-center mx-auto mb-3 relative glow-ring bg-secondary/30 backdrop-blur-md border border-border/50"
           >
-            <Target className="w-7 h-7 text-primary-foreground" />
+            <img src="/comp-logo.PNG" alt="GeniusHub Logo" className="w-8 h-8 object-contain drop-shadow-lg relative z-10" />
           </motion.div>
+          
           <h1 className="text-3xl font-extrabold font-display mb-2 tracking-tight">
             <span className="gradient-text-accent">JD MATCH</span>
           </h1>
+          
+          {/* 🎯 CHANGE 2: Subtitle text replacement and highlight */}
           <p className="text-sm text-muted-foreground max-w-md mx-auto">
-            Paste a job description — AI extracts requirements and strictly matches top candidates
+            Paste a job description — <span className="font-bold text-primary">GeniusHub</span> extracts requirements and strictly matches top candidates
           </p>
         </motion.div>
 
@@ -99,10 +102,13 @@ export default function JDMatchPage() {
               <div className="absolute bottom-3 right-3 text-[10px] font-mono text-muted-foreground">{jd.length} chars</div>
             </div>
             <div className="flex gap-2">
+              
+              {/* 🎯 CHANGE 4: Button Icon replacement (kept exact sizing w-4 h-4) */}
               <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
                 onClick={handleMatch} disabled={loading || !jd.trim()} className="btn-primary-glow flex-1">
-                {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Target className="w-4 h-4" />} Analyze & Match
+                {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <img src="/comp-logo.PNG" className="w-4 h-4 object-contain" alt="Match Logo" />} Analyze & Match
               </motion.button>
+              
               <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
                 onClick={() => setJd(SAMPLE_JD)} className="btn-ghost-glow">Sample JD</motion.button>
             </div>
@@ -181,8 +187,10 @@ export default function JDMatchPage() {
                     <FileText className="w-7 h-7 text-accent" />
                   </div>
                   <h3 className="text-base font-bold text-foreground mb-2">Intelligent JD Matching</h3>
+                  
+                  {/* 🎯 CHANGE 3: Empty State text replacement and highlight */}
                   <p className="text-sm text-muted-foreground max-w-sm leading-relaxed">
-                    AI extracts skills, experience, and role details, then strictly filters out candidates lacking the requirements.
+                    <span className="font-bold text-primary">GeniusHub</span> extracts skills, experience, and role details, then strictly filters out candidates lacking the requirements.
                   </p>
                 </GlowingCard>
               </motion.div>
