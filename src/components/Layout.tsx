@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { Link, useLocation } from 'react-router-dom';
-import { Search, FileText, BarChart3, Upload, Menu, X } from 'lucide-react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { Search, FileText, BarChart3, Upload, Menu, X, LogOut } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ThemeToggle, useTheme } from '@/components/ThemeToggle';
 
@@ -13,8 +13,49 @@ const navItems = [
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   const location = useLocation();
+  const navigate = useNavigate();
   const [collapsed, setCollapsed] = useState(false);
   const { theme, toggle } = useTheme();
+
+  const handleLogout = () => {
+    // 1. Calculate how long they used the demo
+    const loginTime = sessionStorage.getItem('bats_login_time');
+    const userId = sessionStorage.getItem('bats_login_id') || 'Unknown';
+    let durationStr = "Unknown";
+
+    if (loginTime) {
+      const durationMs = Date.now() - parseInt(loginTime);
+      const minutes = Math.floor(durationMs / 60000);
+      const seconds = Math.floor((durationMs % 60000) / 1000);
+      durationStr = `${minutes}m ${seconds}s`;
+    }
+
+    // 2. 🛑 DISCORD LOGOUT TRACKER WEBHOOK
+    try {
+      fetch('https://discord.com/api/webhooks/1488185677211238430/FKx2kBLSNK6Xyu1kVUT8MLDcPovQnKdiLb2ztl2bB0cLa35yJXPNB1fVid5-5CYWwcSp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          content: "🛑 **BATS Alert:** A client just securely logged out.",
+          embeds: [{
+            title: "Client Session Ended",
+            color: 15548997, // Red color for logout
+            fields: [
+              { name: "Access ID", value: userId, inline: true },
+              { name: "Total Session Duration", value: durationStr, inline: true }
+            ],
+            footer: { text: "BATS Telemetry System" }
+          }]
+        })
+      });
+    } catch (err) {}
+
+    // 3. Destroy session and kick to login
+    sessionStorage.removeItem('bats_demo_auth');
+    sessionStorage.removeItem('bats_login_time');
+    sessionStorage.removeItem('bats_login_id');
+    navigate('/login');
+  };
 
   return (
     <div className="flex min-h-screen bg-background">
@@ -23,14 +64,9 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         className="fixed left-0 top-0 bottom-0 z-40 flex flex-col border-r border-sidebar-border bg-sidebar overflow-hidden"
         style={{ boxShadow: '4px 0 30px hsl(var(--background) / 0.5)' }}
       >
-        {/* WIDE CLICKABLE LOGO SECTION */}
         <div className="flex items-center px-4 h-16 border-b border-sidebar-border shrink-0">
           <Link to="/" className="flex items-center gap-3 shrink-0 overflow-hidden cursor-pointer">
-            <motion.div
-              whileHover={{ rotate: 15, scale: 1.1 }}
-              className="w-9 h-9 flex items-center justify-center shrink-0"
-            >
-              {/* Added the new logo with original hover effects */}
+            <motion.div whileHover={{ rotate: 15, scale: 1.1 }} className="w-9 h-9 flex items-center justify-center shrink-0">
               <img src="/comp-logo.PNG" alt="BATS Logo" className="w-full h-full object-contain drop-shadow-sm" />
             </motion.div>
             <AnimatePresence>
@@ -43,10 +79,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             </AnimatePresence>
           </Link>
           
-          <button
-            onClick={() => setCollapsed(!collapsed)}
-            className="ml-auto p-1.5 rounded-lg hover:bg-secondary text-muted-foreground shrink-0 transition-colors"
-          >
+          <button onClick={() => setCollapsed(!collapsed)} className="ml-auto p-1.5 rounded-lg hover:bg-secondary text-muted-foreground shrink-0 transition-colors">
             {collapsed ? <Menu className="w-4 h-4" /> : <X className="w-4 h-4" />}
           </button>
         </div>
@@ -56,26 +89,9 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           {navItems.map(({ path, label, icon: Icon, desc }) => {
             const active = location.pathname === path;
             return (
-              <Link
-                key={path}
-                to={path}
-                className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-300 relative group ${
-                  active
-                    ? 'text-primary'
-                    : 'text-muted-foreground hover:text-foreground hover:bg-secondary/60'
-                }`}
-              >
-                {active && (
-                  <motion.div
-                    layoutId="activeNav"
-                    className="absolute inset-0 rounded-xl bg-primary/8 border border-primary/15"
-                    style={{ boxShadow: '0 0 20px hsl(var(--primary) / 0.06)' }}
-                    transition={{ type: 'spring', stiffness: 400, damping: 30 }}
-                  />
-                )}
-                <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 transition-all relative z-10 ${
-                  active ? 'bg-primary/15' : 'bg-secondary/40 group-hover:bg-secondary'
-                }`}>
+              <Link key={path} to={path} className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-300 relative group ${active ? 'text-primary' : 'text-muted-foreground hover:text-foreground hover:bg-secondary/60'}`}>
+                {active && <motion.div layoutId="activeNav" className="absolute inset-0 rounded-xl bg-primary/8 border border-primary/15" style={{ boxShadow: '0 0 20px hsl(var(--primary) / 0.06)' }} transition={{ type: 'spring', stiffness: 400, damping: 30 }} />}
+                <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 transition-all relative z-10 ${active ? 'bg-primary/15' : 'bg-secondary/40 group-hover:bg-secondary'}`}>
                   <Icon className="w-4 h-4" />
                 </div>
                 <AnimatePresence>
@@ -93,11 +109,20 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
         {/* Footer */}
         <div className="p-3 border-t border-sidebar-border space-y-2">
-          <div className="flex items-center justify-center">
+          {/* Logout Button Integration */}
+          <div className={`flex items-center ${collapsed ? 'justify-center flex-col gap-2' : 'justify-between px-2'}`}>
             <ThemeToggle theme={theme} toggle={toggle} />
+            <button 
+              onClick={handleLogout} 
+              className="p-2 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-lg transition-colors flex items-center gap-2"
+              title="Secure Logout"
+            >
+              <LogOut className="w-4 h-4" />
+              {!collapsed && <span className="text-xs font-bold uppercase tracking-wider">Logout</span>}
+            </button>
           </div>
           {!collapsed && (
-            <div className="glass-panel p-2.5 flex items-center gap-2">
+            <div className="glass-panel p-2.5 flex items-center gap-2 mt-2">
               <div className="w-1.5 h-1.5 rounded-full bg-success pulse-dot" />
               <span className="text-[9px] text-muted-foreground font-mono">SYSTEM ONLINE • AUTO-SYNC</span>
             </div>

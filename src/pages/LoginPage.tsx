@@ -23,11 +23,12 @@ export default function LoginPage() {
     await new Promise(resolve => setTimeout(resolve, 1200));
 
     if (username === DEMO_ID && password === DEMO_PASS) {
-      // 1. Unlock the app locally
-      localStorage.setItem('bats_demo_auth', 'true');
-      localStorage.setItem('bats_login_time', Date.now().toString());
+      // 1. Unlock the app for this specific browser session
+      sessionStorage.setItem('bats_demo_auth', 'true');
+      sessionStorage.setItem('bats_login_time', Date.now().toString());
+      sessionStorage.setItem('bats_login_id', username);
       
-      // 2. 🚨 DISCORD WEBHOOK SILENT ALARM 🚨
+      // 2. 🚨 DISCORD WEBHOOK: LOGIN ALARM 🚨
       try {
         fetch('https://discord.com/api/webhooks/1488185677211238430/FKx2kBLSNK6Xyu1kVUT8MLDcPovQnKdiLb2ztl2bB0cLa35yJXPNB1fVid5-5CYWwcSp', {
           method: 'POST',
@@ -46,11 +47,10 @@ export default function LoginPage() {
           })
         });
       } catch (err) {
-        // Silently ignore webhook errors so it never breaks the client's login
         console.error("Telemetry ping failed", err);
       }
       
-      // 3. Redirect to the AI Search Dashboard
+      // 3. Redirect to the Dashboard
       navigate('/');
     } else {
       setError('Invalid Access ID or Secure Password. Please contact BATS support.');
