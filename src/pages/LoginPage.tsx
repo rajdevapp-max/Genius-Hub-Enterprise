@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Lock, User, ArrowRight, ShieldCheck, Zap, Target, BrainCircuit, Loader2 } from 'lucide-react';
+import { Lock, User, ArrowRight, ShieldCheck, Zap, Target, BrainCircuit, Loader2, ExternalLink } from 'lucide-react';
 
 export default function LoginPage() {
   const [username, setUsername] = useState('');
@@ -66,94 +66,116 @@ export default function LoginPage() {
   ];
 
   return (
-    <div className="min-h-screen w-full bg-background flex items-center justify-center relative overflow-hidden p-4">
+    // Forced Dark Mode Background Wrapper
+    <div className="min-h-screen w-full bg-[#050914] text-slate-200 flex items-center justify-center relative overflow-hidden p-4">
       
       {/* 🌟 CINEMATIC BACKGROUND WATERMARK 🌟 */}
       <div className="fixed inset-0 pointer-events-none flex items-center justify-center z-[0] overflow-hidden">
+        {/* Subtle radial glow behind the logo */}
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-blue-900/20 via-[#050914]/80 to-[#050914] z-[-1]" />
+        
         <motion.div
-          animate={{ scale: [1, 1.05, 1], opacity: [0.12, 0.25, 0.12] }}
+          animate={{ scale: [1, 1.05, 1], opacity: [0.08, 0.15, 0.08] }}
           transition={{ duration: 8, repeat: Infinity, ease: "easeInOut" }}
-          className="w-[60vw] max-w-[500px] aspect-square flex items-center justify-center"
+          className="w-[70vw] max-w-[600px] aspect-square flex items-center justify-center"
         >
           <motion.img 
             animate={{ rotate: 360 }}
-            transition={{ duration: 90, repeat: Infinity, ease: "linear" }}
+            transition={{ duration: 120, repeat: Infinity, ease: "linear" }}
             src="/comp-logo.PNG" 
-            alt="Watermark" 
-            className="w-full h-full object-contain filter drop-shadow-[0_0_60px_rgba(56,189,248,0.4)]" 
+            alt="BATS Watermark" 
+            className="w-full h-full object-contain filter drop-shadow-[0_0_80px_rgba(56,189,248,0.5)]" 
           />
         </motion.div>
       </div>
 
-      <div className="w-full max-w-5xl grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-0 relative z-10 bg-sidebar/70 backdrop-blur-2xl border border-border/50 rounded-3xl overflow-hidden shadow-2xl">
+      {/* Main Glassmorphism Container */}
+      <div className="w-full max-w-5xl grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-0 relative z-10 bg-black/40 backdrop-blur-3xl border border-white/10 rounded-3xl overflow-hidden shadow-[0_0_50px_rgba(0,0,0,0.5)]">
         
         {/* LEFT COLUMN: BRANDING & FEATURES */}
-        <div className="p-8 lg:p-12 border-b lg:border-b-0 lg:border-r border-border/50 flex flex-col justify-between relative bg-primary/5">
-          <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-br from-primary/10 to-transparent pointer-events-none" />
+        <div className="p-8 lg:p-12 border-b lg:border-b-0 lg:border-r border-white/10 flex flex-col justify-between relative overflow-hidden">
+          {/* Internal gradient sweep */}
+          <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-br from-blue-500/10 to-transparent pointer-events-none" />
           
           <div className="relative z-10">
-            <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="mb-8">
-              <div className="bg-white/90 p-3 rounded-xl inline-block mb-6 shadow-lg">
+            <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }} className="mb-8">
+              {/* BATS LOGO */}
+              <div className="bg-white/95 p-3 rounded-xl inline-block mb-6 shadow-[0_0_30px_rgba(255,255,255,0.1)]">
                 <img src="/bay-area-final.jpeg" alt="BATS Logo" className="h-10 object-contain" />
               </div>
               
-              <h2 className="text-2xl font-extrabold font-display tracking-tight text-foreground mb-2">
+              <h2 className="text-2xl font-extrabold font-display tracking-tight text-white mb-2">
                 Bay Area Technology Solutions
               </h2>
-              <p className="text-primary font-bold tracking-widest uppercase text-xs mb-4">GeniusHub • Enterprise Evaluation</p>
-              <p className="text-sm text-muted-foreground leading-relaxed max-w-sm">
+              <p className="text-blue-400 font-bold tracking-widest uppercase text-xs mb-4">GeniusHub • Enterprise Evaluation</p>
+              <p className="text-sm text-slate-400 leading-relaxed max-w-sm mb-4">
                 Empowering businesses with elite IT staffing and custom software solutions. Experience our proprietary AI engine designed to analyze, filter, and strictly match top-tier technical talent at unprecedented speeds.
               </p>
+
+              {/* 🎯 NEW: Website Link */}
+              <motion.a 
+                whileHover={{ x: 5 }}
+                href="https://bayareatechsol.com/" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 text-xs font-bold text-blue-400 hover:text-blue-300 transition-colors bg-blue-500/10 px-3 py-1.5 rounded-lg border border-blue-500/20"
+              >
+                Visit BATS Corporate Website <ExternalLink className="w-3 h-3" />
+              </motion.a>
             </motion.div>
 
-            <div className="space-y-5">
+            <div className="space-y-6 mt-8">
               {features.map((f, i) => (
                 <motion.div 
                   key={i} 
                   initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.2 + (i * 0.1) }}
-                  className="flex items-start gap-3"
+                  className="flex items-start gap-4"
                 >
-                  <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0 border border-primary/20">
-                    <f.icon className="w-4 h-4 text-primary" />
+                  <div className="w-9 h-9 rounded-xl bg-blue-500/10 flex items-center justify-center shrink-0 border border-blue-500/20 shadow-[0_0_15px_rgba(59,130,246,0.15)]">
+                    <f.icon className="w-4 h-4 text-blue-400" />
                   </div>
                   <div>
-                    <h4 className="text-sm font-bold text-foreground">{f.title}</h4>
-                    <p className="text-xs text-muted-foreground leading-relaxed">{f.desc}</p>
+                    <h4 className="text-sm font-bold text-slate-200">{f.title}</h4>
+                    <p className="text-xs text-slate-400 leading-relaxed mt-0.5">{f.desc}</p>
                   </div>
                 </motion.div>
               ))}
             </div>
           </div>
 
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.8 }} className="mt-10 relative z-10 flex items-center gap-2 text-xs font-mono text-muted-foreground">
-             <div className="w-2 h-2 rounded-full bg-success animate-pulse" />
-             SECURE DEMO ENVIRONMENT
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.8 }} className="mt-12 relative z-10 flex items-center gap-2 text-[10px] font-mono text-slate-500 tracking-widest uppercase">
+             <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.8)]" />
+             Secure Demo Node Online
           </motion.div>
         </div>
 
         {/* RIGHT COLUMN: LOGIN FORM */}
-        <div className="p-8 lg:p-12 flex flex-col justify-center bg-background/50 relative">
+        <div className="p-8 lg:p-12 flex flex-col justify-center bg-black/20 relative">
           <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.1 }} className="max-w-sm w-full mx-auto">
             
             <div className="text-center mb-8">
-              <div className="w-16 h-16 mx-auto bg-secondary/50 rounded-2xl flex items-center justify-center border border-border/50 mb-4 shadow-inner relative overflow-hidden">
-                <Lock className="w-8 h-8 text-primary relative z-10" />
-                <div className="absolute inset-0 bg-primary/20 blur-xl" />
-              </div>
-              <h3 className="text-xl font-bold font-display text-foreground">Client Access</h3>
-              <p className="text-xs text-muted-foreground mt-1">Enter your provided BATS demo credentials</p>
+              <motion.div 
+                animate={{ boxShadow: ['0 0 15px rgba(59,130,246,0.2)', '0 0 30px rgba(59,130,246,0.4)', '0 0 15px rgba(59,130,246,0.2)'] }}
+                transition={{ duration: 3, repeat: Infinity }}
+                className="w-16 h-16 mx-auto bg-blue-950/50 rounded-2xl flex items-center justify-center border border-blue-500/30 mb-5 relative overflow-hidden"
+              >
+                <Lock className="w-7 h-7 text-blue-400 relative z-10" />
+                <div className="absolute inset-0 bg-blue-500/10 blur-xl" />
+              </motion.div>
+              <h3 className="text-xl font-bold font-display text-white tracking-wide">Client Authentication</h3>
+              <p className="text-xs text-slate-400 mt-1">Enter your assigned BATS credentials</p>
             </div>
 
-            <form onSubmit={handleLogin} className="space-y-4">
+            <form onSubmit={handleLogin} className="space-y-5">
               <div className="space-y-1.5">
-                <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground pl-1">Access ID</label>
-                <div className="relative">
-                  <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400 pl-1">Access ID</label>
+                <div className="relative group">
+                  <User className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 group-focus-within:text-blue-400 transition-colors" />
                   <input 
                     type="text" 
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
-                    className="w-full bg-secondary/30 border border-border/50 rounded-xl py-3 pl-10 pr-4 text-sm text-foreground focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50 transition-all placeholder:text-muted-foreground/30"
+                    className="w-full bg-black/40 border border-white/10 rounded-xl py-3 pl-11 pr-4 text-sm text-white focus:outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/50 transition-all placeholder:text-slate-600"
                     placeholder="Enter Client ID"
                     required
                   />
@@ -161,14 +183,14 @@ export default function LoginPage() {
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground pl-1">Secure Password</label>
-                <div className="relative">
-                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400 pl-1">Secure Password</label>
+                <div className="relative group">
+                  <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 group-focus-within:text-blue-400 transition-colors" />
                   <input 
                     type="password" 
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="w-full bg-secondary/30 border border-border/50 rounded-xl py-3 pl-10 pr-4 text-sm text-foreground focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50 transition-all placeholder:text-muted-foreground/30"
+                    className="w-full bg-black/40 border border-white/10 rounded-xl py-3 pl-11 pr-4 text-sm text-white focus:outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/50 transition-all placeholder:text-slate-600"
                     placeholder="••••••••"
                     required
                   />
@@ -177,8 +199,8 @@ export default function LoginPage() {
 
               <AnimatePresence>
                 {error && (
-                  <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="text-xs text-destructive text-center bg-destructive/10 py-2 rounded-lg border border-destructive/20 font-medium">
-                    {error}
+                  <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="text-xs text-red-400 text-center bg-red-500/10 py-2.5 rounded-lg border border-red-500/20 font-medium flex items-center justify-center gap-2">
+                    <ShieldCheck className="w-4 h-4" /> {error}
                   </motion.div>
                 )}
               </AnimatePresence>
@@ -186,7 +208,7 @@ export default function LoginPage() {
               <button 
                 type="submit" 
                 disabled={loading || !username || !password}
-                className="w-full btn-primary-glow !py-3 !rounded-xl mt-2 flex items-center justify-center gap-2 group disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full bg-blue-600 hover:bg-blue-500 text-white shadow-[0_0_20px_rgba(37,99,235,0.3)] hover:shadow-[0_0_30px_rgba(37,99,235,0.5)] transition-all font-bold tracking-wide py-3 rounded-xl mt-4 flex items-center justify-center gap-2 group disabled:opacity-50 disabled:cursor-not-allowed border border-blue-400/20"
               >
                 {loading ? (
                   <Loader2 className="w-5 h-5 animate-spin" />
@@ -198,7 +220,7 @@ export default function LoginPage() {
               </button>
             </form>
 
-            <p className="text-center text-[10px] text-muted-foreground mt-8 px-4">
+            <p className="text-center text-[10px] text-slate-500 mt-8 px-4 leading-relaxed">
               Authorized personnel only. Activity on this evaluation node is securely monitored and logged by BATS.
             </p>
           </motion.div>
