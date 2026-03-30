@@ -18,9 +18,15 @@ const queryClient = new QueryClient();
 
 // --- THE SMART LOCK SECURITY WRAPPER ---
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
-  const isDemoSite = window.location.hostname.includes("resume-bats.vercel.app");
+  // 🎯 THE FIX: Identify your ORIGINAL site and LOCALHOST
+  const isOriginalSite = window.location.hostname.includes("resume-bats.vercel.app") || window.location.hostname.includes("localhost");
+  
+  // 🎯 If it is NOT the original site, it must be the Demo site!
+  const isDemoSite = !isOriginalSite;
+  
   const isAuthenticated = sessionStorage.getItem('bats_demo_auth') === 'true';
   
+  // Only lock them out if they are on the Demo site AND not logged in
   if (isDemoSite && !isAuthenticated) {
     return <Navigate to="/login" replace />;
   }

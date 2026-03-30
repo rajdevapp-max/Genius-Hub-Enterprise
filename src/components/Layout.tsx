@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Search, FileText, BarChart3, Upload, Menu, X, LogOut } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -17,8 +17,42 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const [collapsed, setCollapsed] = useState(false);
   const { theme, toggle } = useTheme();
 
+  // 🚨 TAB CLOSE TRACKER (Fires silently when they close the browser) 🚨
+  useEffect(() => {
+    const handleTabClose = () => {
+      const isAuth = sessionStorage.getItem('bats_demo_auth');
+      const loginTime = sessionStorage.getItem('bats_login_time');
+      const userId = sessionStorage.getItem('bats_login_id');
+
+      if (isAuth === 'true' && loginTime && userId) {
+        const durationMs = Date.now() - parseInt(loginTime);
+        const minutes = Math.floor(durationMs / 60000);
+        const seconds = Math.floor((durationMs % 60000) / 1000);
+        
+        const payload = JSON.stringify({
+          content: "🛑 **BATS Alert:** A client closed the browser tab and ended the session.",
+          embeds: [{
+            title: "Client Session Ended (Tab Closed)",
+            color: 15548997,
+            fields: [
+              { name: "Access ID", value: userId, inline: true },
+              { name: "Total Session Duration", value: `${minutes}m ${seconds}s`, inline: true }
+            ],
+            footer: { text: "BATS Telemetry System" }
+          }]
+        });
+
+        // sendBeacon guarantees the webhook fires even as the tab is dying!
+        const blob = new Blob([payload], { type: 'application/json' });
+        navigator.sendBeacon('https://discord.com/api/webhooks/1488185677211238430/FKx2kBLSNK6Xyu1kVUT8MLDcPovQnKdiLb2ztl2bB0cLa35yJXPNB1fVid5-5CYWwcSp', blob);
+      }
+    };
+
+    window.addEventListener('beforeunload', handleTabClose);
+    return () => window.removeEventListener('beforeunload', handleTabClose);
+  }, []);
+
   const handleLogout = () => {
-    // 1. Calculate how long they used the demo
     const loginTime = sessionStorage.getItem('bats_login_time');
     const userId = sessionStorage.getItem('bats_login_id') || 'Unknown';
     let durationStr = "Unknown";
@@ -30,16 +64,15 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       durationStr = `${minutes}m ${seconds}s`;
     }
 
-    // 2. 🛑 DISCORD LOGOUT TRACKER WEBHOOK
     try {
       fetch('https://discord.com/api/webhooks/1488185677211238430/FKx2kBLSNK6Xyu1kVUT8MLDcPovQnKdiLb2ztl2bB0cLa35yJXPNB1fVid5-5CYWwcSp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          content: "🛑 **BATS Alert:** A client just securely logged out.",
+          content: "🛑 **BATS Alert:** A client explicitly clicked Logout.",
           embeds: [{
-            title: "Client Session Ended",
-            color: 15548997, // Red color for logout
+            title: "Client Session Ended (Manual Logout)",
+            color: 15548997,
             fields: [
               { name: "Access ID", value: userId, inline: true },
               { name: "Total Session Duration", value: durationStr, inline: true }
@@ -50,7 +83,6 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       });
     } catch (err) {}
 
-    // 3. Destroy session and kick to login
     sessionStorage.removeItem('bats_demo_auth');
     sessionStorage.removeItem('bats_login_time');
     sessionStorage.removeItem('bats_login_id');
@@ -109,7 +141,6 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
         {/* Footer */}
         <div className="p-3 border-t border-sidebar-border space-y-2">
-          {/* Logout Button Integration */}
           <div className={`flex items-center ${collapsed ? 'justify-center flex-col gap-2' : 'justify-between px-2'}`}>
             <ThemeToggle theme={theme} toggle={toggle} />
             <button 
