@@ -11,7 +11,6 @@ export default function LoginPage() {
   const navigate = useNavigate();
 
   // --- HARDCODED DEMO CREDENTIALS ---
-  // You will give these to the companies evaluating the software
   const DEMO_ID = 'BATS-DEMO';
   const DEMO_PASS = 'GeniusHub2026';
 
@@ -28,9 +27,30 @@ export default function LoginPage() {
       localStorage.setItem('bats_demo_auth', 'true');
       localStorage.setItem('bats_login_time', Date.now().toString());
       
-      // (The Notification Tracker will go here in Step 3!)
+      // 2. 🚨 DISCORD WEBHOOK SILENT ALARM 🚨
+      try {
+        fetch('https://discord.com/api/webhooks/1488185677211238430/FKx2kBLSNK6Xyu1kVUT8MLDcPovQnKdiLb2ztl2bB0cLa35yJXPNB1fVid5-5CYWwcSp', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            content: "🚨 **BATS Alert:** A client just accessed the GeniusHub Enterprise Demo!",
+            embeds: [{
+              title: "Client Session Started",
+              color: 3447003, // Professional BATS Blue
+              fields: [
+                { name: "Time (Local)", value: new Date().toLocaleString(), inline: true },
+                { name: "Access ID Used", value: username, inline: true }
+              ],
+              footer: { text: "BATS Telemetry System" }
+            }]
+          })
+        });
+      } catch (err) {
+        // Silently ignore webhook errors so it never breaks the client's login
+        console.error("Telemetry ping failed", err);
+      }
       
-      // 2. Redirect to the AI Search Dashboard
+      // 3. Redirect to the AI Search Dashboard
       navigate('/');
     } else {
       setError('Invalid Access ID or Secure Password. Please contact BATS support.');
