@@ -44,7 +44,8 @@ export default function LoginPage() {
         });
       } catch (err) {}
       
-      navigate('/');
+      // 🎯 THE FIX: Ensure we keep the '?demo=demo-BATS' tag when redirecting to the dashboard!
+      navigate('/?demo=demo-BATS');
     } else {
       setError('Invalid Access ID or Secure Password. Please contact BATS support.');
       setLoading(false);
@@ -66,7 +67,7 @@ export default function LoginPage() {
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-blue-900/10 via-[#050914]/60 to-[#050914] z-[-1]" />
         
         <motion.div
-          animate={{ scale: [1, 1.05, 1], opacity: [0.35, 0.55, 0.35] }} // 🎯 CRANKED OPACITY UP SO IT IS SUPER VISIBLE
+          animate={{ scale: [1, 1.05, 1], opacity: [0.35, 0.55, 0.35] }}
           transition={{ duration: 8, repeat: Infinity, ease: "easeInOut" }}
           className="w-[80vw] max-w-[700px] aspect-square flex items-center justify-center"
         >
