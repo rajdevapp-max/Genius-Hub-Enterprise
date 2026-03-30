@@ -6,13 +6,17 @@ import {
 import ATSScoreRing from './ATSScoreRing';
 import { api } from '@/lib/api';
 
-export default function CandidateCard({ candidate, rank, bookmarked, blindMode = false, onBookmark, onViewDetail }) {
+// 🎯 THE FIX: This safely neutralizes special characters like '+' in 'C++' so they don't break the highlighter!
+const escapeRegExp = (string: string) => {
+  return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+};
+
+export default function CandidateCard({ candidate, rank, bookmarked, blindMode = false, onBookmark, onViewDetail }: any) {
   const certs = candidate.certificates || [];
   const links = candidate.hyperlinks || [];
   const isNameMatch = candidate.match_type === 'name';
   const isFraud = candidate.fraud_flag === 1;
 
-  // --- NEW: Safe Access for Experience and Gaps ---
   const rawExp = candidate.experience_years || 0;
   const relExp = candidate.relevant_experience_years ?? rawExp;
   const gaps = candidate.total_gap_years || 0;
@@ -79,7 +83,6 @@ export default function CandidateCard({ candidate, rank, bookmarked, blindMode =
               </span>
             )}
             
-            {/* --- NEW: PRECISE GAP CALCULATION BADGE --- */}
             {gaps > 0 ? (
               <span className="text-[9px] px-1.5 py-0.5 rounded-md bg-muted text-muted-foreground font-display font-medium tracking-wider flex items-center gap-1 border border-border">
                 {gaps}y CAREER GAP
@@ -109,7 +112,6 @@ export default function CandidateCard({ candidate, rank, bookmarked, blindMode =
             )}
             {candidate.location && <span className="flex items-center gap-1"><MapPin className="w-3 h-3" /> {candidate.location}</span>}
             
-            {/* --- NEW: RELEVANT VS TOTAL EXPERIENCE DISPLAY --- */}
             {rawExp > 0 && (
               <span className="flex items-center gap-1">
                 <Briefcase className="w-3 h-3" /> 
@@ -132,31 +134,34 @@ export default function CandidateCard({ candidate, rank, bookmarked, blindMode =
           </div>
 
           <div className="flex flex-wrap gap-1 mb-1.5">
-            {(candidate.matched_mandatory || []).map(s => <span key={`m-${s}`} className="skill-tag border border-warning text-warning bg-warning/10">{s}</span>)}
-            {(candidate.matched_secondary || candidate.matched_skills || []).slice(0, 5).map(s => <span key={`s-${s}`} className="skill-tag-matched">{s}</span>)}
-            {(candidate.missing_mandatory || candidate.missing_skills || []).slice(0, 3).map(s => <span key={`x-${s}`} className="skill-tag-missing">{s}</span>)}
+            {(candidate.matched_mandatory || []).map((s: string) => <span key={`m-${s}`} className="skill-tag border border-warning text-warning bg-warning/10">{s}</span>)}
+            {(candidate.matched_secondary || candidate.matched_skills || []).slice(0, 5).map((s: string) => <span key={`s-${s}`} className="skill-tag-matched">{s}</span>)}
+            {(candidate.missing_mandatory || candidate.missing_skills || []).slice(0, 3).map((s: string) => <span key={`x-${s}`} className="skill-tag-missing">{s}</span>)}
             {(candidate.skills || [])
-              .filter(s => 
+              .filter((s: string) => 
                 !(candidate.matched_mandatory || []).includes(s) && 
                 !(candidate.matched_secondary || candidate.matched_skills || []).includes(s) && 
                 !(candidate.missing_mandatory || candidate.missing_skills || []).includes(s)
               )
-              .slice(0, 4).map(s => <span key={`o-${s}`} className="skill-tag">{s}</span>)}
+              .slice(0, 4).map((s: string) => <span key={`o-${s}`} className="skill-tag">{s}</span>)}
           </div>
 
           {candidate.context_snippets && candidate.context_snippets.length > 0 && (
              <div className="mt-2 mb-1 flex flex-col gap-1">
-               {candidate.context_snippets.slice(0, 2).map((snippet, idx) => (
+               {candidate.context_snippets.slice(0, 2).map((snippet: any, idx: number) => {
+                 // 🎯 THE IMPLEMENTATION: Escaping the skill before creating the RegExp
+                 const safeSkill = escapeRegExp(snippet.skill);
+                 return (
                  <div key={idx} className="flex items-start gap-2 text-[10px] text-muted-foreground bg-secondary/30 p-1.5 rounded-md border border-border/50">
                     <Search className="w-3 h-3 shrink-0 mt-0.5 text-primary" />
                     <span className="italic">
-                      "{snippet.context.split(new RegExp(`(${snippet.skill})`, 'gi')).map((part, i) => 
+                      "{snippet.context.split(new RegExp(`(${safeSkill})`, 'gi')).map((part: string, i: number) => 
                         part.toLowerCase() === snippet.skill.toLowerCase() ? 
                         <strong key={i} className="text-foreground font-bold">{part}</strong> : part
                       )}"
                     </span>
                  </div>
-               ))}
+               )})}
              </div>
           )}
 
