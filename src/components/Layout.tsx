@@ -17,8 +17,14 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const [collapsed, setCollapsed] = useState(false);
   const { theme, toggle } = useTheme();
 
-  // 🚨 TAB CLOSE TRACKER (Fires silently when they close the browser) 🚨
+  // 🎯 THE FIX: Check if we are on the demo site using the secret key
+  const isDemoSite = window.location.search.includes("demo=demo-BATS");
+
+  // 🚨 TAB CLOSE TRACKER 🚨
   useEffect(() => {
+    // If it's your original model, don't even run the tracker!
+    if (!isDemoSite) return;
+
     const handleTabClose = () => {
       const isAuth = sessionStorage.getItem('bats_demo_auth');
       const loginTime = sessionStorage.getItem('bats_login_time');
@@ -42,7 +48,6 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           }]
         });
 
-        // sendBeacon guarantees the webhook fires even as the tab is dying!
         const blob = new Blob([payload], { type: 'application/json' });
         navigator.sendBeacon('https://discord.com/api/webhooks/1488185677211238430/FKx2kBLSNK6Xyu1kVUT8MLDcPovQnKdiLb2ztl2bB0cLa35yJXPNB1fVid5-5CYWwcSp', blob);
       }
@@ -50,7 +55,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
     window.addEventListener('beforeunload', handleTabClose);
     return () => window.removeEventListener('beforeunload', handleTabClose);
-  }, []);
+  }, [isDemoSite]);
 
   const handleLogout = () => {
     const loginTime = sessionStorage.getItem('bats_login_time');
@@ -86,7 +91,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     sessionStorage.removeItem('bats_demo_auth');
     sessionStorage.removeItem('bats_login_time');
     sessionStorage.removeItem('bats_login_id');
-    navigate('/login');
+    navigate('/login?demo=demo-BATS');
   };
 
   return (
@@ -97,7 +102,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         style={{ boxShadow: '4px 0 30px hsl(var(--background) / 0.5)' }}
       >
         <div className="flex items-center px-4 h-16 border-b border-sidebar-border shrink-0">
-          <Link to="/" className="flex items-center gap-3 shrink-0 overflow-hidden cursor-pointer">
+          <Link to={isDemoSite ? "/?demo=demo-BATS" : "/"} className="flex items-center gap-3 shrink-0 overflow-hidden cursor-pointer">
             <motion.div whileHover={{ rotate: 15, scale: 1.1 }} className="w-9 h-9 flex items-center justify-center shrink-0">
               <img src="/comp-logo.PNG" alt="BATS Logo" className="w-full h-full object-contain drop-shadow-sm" />
             </motion.div>
@@ -120,8 +125,10 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         <nav className="flex-1 py-4 px-2.5 space-y-1">
           {navItems.map(({ path, label, icon: Icon, desc }) => {
             const active = location.pathname === path;
+            const targetPath = isDemoSite ? `${path}?demo=demo-BATS` : path; // Keep demo key in URLs when navigating!
+            
             return (
-              <Link key={path} to={path} className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-300 relative group ${active ? 'text-primary' : 'text-muted-foreground hover:text-foreground hover:bg-secondary/60'}`}>
+              <Link key={path} to={targetPath} className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-300 relative group ${active ? 'text-primary' : 'text-muted-foreground hover:text-foreground hover:bg-secondary/60'}`}>
                 {active && <motion.div layoutId="activeNav" className="absolute inset-0 rounded-xl bg-primary/8 border border-primary/15" style={{ boxShadow: '0 0 20px hsl(var(--primary) / 0.06)' }} transition={{ type: 'spring', stiffness: 400, damping: 30 }} />}
                 <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 transition-all relative z-10 ${active ? 'bg-primary/15' : 'bg-secondary/40 group-hover:bg-secondary'}`}>
                   <Icon className="w-4 h-4" />
@@ -143,14 +150,19 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         <div className="p-3 border-t border-sidebar-border space-y-2">
           <div className={`flex items-center ${collapsed ? 'justify-center flex-col gap-2' : 'justify-between px-2'}`}>
             <ThemeToggle theme={theme} toggle={toggle} />
-            <button 
-              onClick={handleLogout} 
-              className="p-2 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-lg transition-colors flex items-center gap-2"
-              title="Secure Logout"
-            >
-              <LogOut className="w-4 h-4" />
-              {!collapsed && <span className="text-xs font-bold uppercase tracking-wider">Logout</span>}
-            </button>
+            
+            {/* 🎯 THE FIX: Only render the Logout button if it is the Demo Site! */}
+            {isDemoSite && (
+              <button 
+                onClick={handleLogout} 
+                className="p-2 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-lg transition-colors flex items-center gap-2"
+                title="Secure Logout"
+              >
+                <LogOut className="w-4 h-4" />
+                {!collapsed && <span className="text-xs font-bold uppercase tracking-wider">Logout</span>}
+              </button>
+            )}
+
           </div>
           {!collapsed && (
             <div className="glass-panel p-2.5 flex items-center gap-2 mt-2">
