@@ -1,7 +1,6 @@
 """
-parser.py — Enhanced Resume Parser v14.0
+parser.py — Enhanced Resume Parser v14.1
 Extracts text, hyperlinks, images, fonts, certificates, and DEEP PDF/DOCX TABLES.
-Table data is prioritized at the TOP of the document for accurate NER extraction.
 """
 import os
 import re
@@ -34,14 +33,14 @@ def extract_text_from_pdf(file_path: str) -> dict:
         all_text = []
         MAX_PAGES = 10 
         
-        # 🎯 THE FIX: Extract tables FIRST and put them at the top of the text block!
         try:
             with pdfplumber.open(file_path) as pdf:
                 for page in pdf.pages[:MAX_PAGES]:
                     tables = page.extract_tables()
                     for table in tables:
                         for row in table:
-                            row_text = " | ".join([str(cell).replace('\n', ' ').strip() for cell in row if cell])
+                            # 🎯 THE FIX: Replace \n with | to separate merged table cells safely!
+                            row_text = " | ".join([str(cell).replace('\n', ' | ').strip() for cell in row if cell])
                             if row_text: all_text.append(row_text)
         except: pass
 
@@ -122,12 +121,12 @@ def extract_text_from_docx(file_path: str) -> dict:
         table_texts = []
         font_set = {}
         
-        # 🎯 THE FIX: Extract tables FIRST so header data is at the top!
         for table in doc.tables:
             for row in table.rows:
                 row_data = []
                 for cell in row.cells:
-                    clean_cell = cell.text.strip().replace('\n', ' ')
+                    # 🎯 THE FIX: Replace \n with | to separate merged table cells safely!
+                    clean_cell = cell.text.strip().replace('\n', ' | ')
                     if clean_cell and clean_cell not in row_data: 
                         row_data.append(clean_cell)
                 if row_data:

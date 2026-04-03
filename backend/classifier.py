@@ -1,7 +1,6 @@
 """
-classifier.py — Multi-AI NER & Skill Extraction v19.5
-Features: Strict Location Hierarchy, C++ Regex Safe, Mathematical Job Gap Calculator.
-Modified for improved location extraction & table-name defense.
+classifier.py — Multi-AI NER & Skill Extraction v21.2
+Features: Strict Location Hierarchy, ZIP Code pinpointing, and Bulletproof Name Extractor with Filename Fallback.
 """
 import os
 import re
@@ -126,20 +125,39 @@ def generate_summary(text: str) -> Optional[str]:
     clean_text = re.sub(r'\s+', ' ', text).strip()
     return clean_text[:300] + "..." if len(clean_text) > 300 else clean_text
 
-def extract_name(text: str) -> str:
+def extract_name(text: str, filename: str = "") -> str:
     lines = [l.strip() for l in text.split('\n') if l.strip()]
-    for line in lines[:15]: 
-        # MODIFIED: Defensive split for tables
-        chunks = re.split(r'[|,\t]', line) 
+    exclusions = {"management", "wealth", "project", "server", "application", "system", "database", "developer", "engineer", "analyst", "administrator", "technologies", "solutions", "summary", "experience", "resume", "curriculum", "vitae", "cv", "profile", "page", "senior", "junior", "lead", "consultant", "manager", "professional", "skills", "aws", "gcp", "azure", "cloud", "data", "science", "architect"}
+
+    for line in lines[:15]:
+        chunks = re.split(r'[|,\t\-\–]', line)
         for chunk in chunks:
             chunk = chunk.strip()
+            if not chunk or len(chunk) < 3: continue
             if '@' in chunk or re.search(r'\d{4,}', chunk) or 'linkedin' in chunk.lower() or 'github' in chunk.lower(): 
                 continue
+
             words = chunk.split()
             if 1 < len(words) <= 4:
+                if any(w.lower() in exclusions for w in words): continue
                 cap_count = sum(1 for w in words if w and w[0].isupper() and w.isalpha())
                 if cap_count >= len(words) - 1 and cap_count > 0:
-                    return chunk
+                    clean_chunk = re.sub(r'[^a-zA-Z\s]', '', chunk).strip()
+                    if clean_chunk and len(clean_chunk.split()) > 1:
+                        return clean_chunk.title()
+
+    if filename:
+        clean_fn = re.sub(r'[\d_+\-\.]', ' ', filename).replace('pdf', '').replace('docx', '').replace('doc', '')
+        words = [w for w in clean_fn.split() if len(w) > 2 and w.lower() not in exclusions]
+        if words: return " ".join(words[:2]).title()
+
+    email_match = re.search(r'([a-zA-Z0-9._-]+)@[a-zA-Z0-9._-]+\.[a-zA-Z0-9_-]+', text)
+    if email_match:
+        email_prefix = email_match.group(1).lower()
+        clean_prefix = re.sub(r'[0-9._-]', ' ', email_prefix).strip()
+        if clean_prefix and len(clean_prefix.split()) > 1:
+            return clean_prefix.title()
+
     return "Unknown"
 
 def extract_email(text: str) -> str:
@@ -150,44 +168,32 @@ def extract_phone(text: str) -> str:
     match = re.search(r'(?:\+?\d{1,3}[-\s]?)?\(?\d{3}\)?[-\s]?\d{3}[-\s]?\d{4}', text)
     return match.group(0) if match else ""
 
-# MODIFIED: Entire function replaced for improved, accurate location extraction
 def extract_location(text: str, phone: str = "") -> str:
-    search_block = text[:1500] 
-    search_lower = search_block.lower()
-
-    global_pat = r'(?:Location|Address|City|Based in|Located in|From)[:\s]+([A-Za-z\s,]{2,40})'
-    global_match = re.search(global_pat, text[:1500], re.IGNORECASE)
-    if global_match:
-        extracted = global_match.group(1).strip().split('\n')[0][:50]
-        if extracted:
-            if "india" in extracted.lower() or "ind" in extracted.lower(): return f"{extracted} (India)"
-            if "usa" in extracted.lower() or "us" in extracted.lower(): return f"{extracted} (USA)"
-            return extracted
-
-    city_state_match_top = re.search(r'([a-z\s]{3,20}),\s*(al|ak|az|ar|ca|co|ct|de|fl|ga|hi|id|il|in|ia|ks|ky|la|me|md|ma|mi|mn|ms|mo|mt|ne|nv|nh|nj|nm|ny|nc|nd|oh|ok|or|pa|ri|sc|sd|tn|tx|ut|vt|va|wa|wv|wi|wy)\b', text[:1000].lower())
-    if city_state_match_top:
-        city = city_state_match_top.group(1).strip().split('\n')[-1].title()
-        state_code = city_state_match_top.group(2).lower()
-        return f"{city}, {STATE_MAPPING.get(state_code, state_code.upper())} (USA)"
+    search_block = text[:800].lower() 
 
     if phone:
         clean_phone = re.sub(r'[^\d+]', '', phone)
         if clean_phone.startswith("+1"): return "USA"
         if clean_phone.startswith("+91") or (clean_phone.startswith("91") and len(clean_phone) == 12): return "India"
-        if clean_phone.startswith("+44"): return "UK"
-        if clean_phone.startswith("+61"): return "Australia"
         if len(clean_phone) == 10:
             area_code = clean_phone[:3]
-            if area_code[0] in "2345": return "USA"
             us_high_area_codes = {"602","603","605","606","607","608","609","610","612","614","615","616","617","618","619","620","623","626","628","630","631","636","646","650","651","657","660","661","662","669","678","682","701","702","703","704","706","707","708","712","713","714","715","716","717","718","719","720","724","727","731","732","734","740","743","747","754","757","760","763","770","772","773","774","775","779","781","785","786","787","801","802","803","804","805","806","808","810","812","813","814","815","816","817","818","828","830","831","832","843","845","847","848","850","856","857","858","859","860","862","863","864","865","870","872","878","901","903","904","906","907","908","909","910","912","913","914","915","916","917","918","919","920","925","928","929","931","936","937","938","940","941","947","949","951","952","954","956","959","970","971","972","973","978","979","980","984","985","989"}
             if area_code in us_high_area_codes: return "USA"
             if area_code[0] in "6789": return "India"
 
-    city_state_match = re.search(r'([a-z\s]{3,20}),\s*(al|ak|az|ar|ca|co|ct|de|fl|ga|hi|id|il|in|ia|ks|ky|la|me|md|ma|mi|mn|ms|mo|mt|ne|nv|nh|nj|nm|ny|nc|nd|oh|ok|or|pa|ri|sc|sd|tn|tx|ut|vt|va|wa|wv|wi|wy)\b', search_lower)
-    if city_state_match:
-        city = city_state_match.group(1).strip().split('\n')[-1].title()
-        state_code = city_state_match.group(2).lower()
-        return f"{city}, {STATE_MAPPING.get(state_code, state_code.upper())} (USA)"
+    zip_match = re.search(r'\b([A-Z]{2})\s*(\d{5})\b', text[:800])
+    if zip_match:
+        state_code = zip_match.group(1).lower()
+        if state_code in STATE_MAPPING:
+            return f"{STATE_MAPPING[state_code]} (USA)"
+
+    city_state_match_top = re.search(r'([a-z\s]{3,20}),\s*(al|ak|az|ar|ca|co|ct|de|fl|ga|hi|id|il|in|ia|ks|ky|la|me|md|ma|mi|mn|ms|mo|mt|ne|nv|nh|nj|nm|ny|nc|nd|oh|ok|or|pa|ri|sc|sd|tn|tx|ut|vt|va|wa|wv|wi|wy)\b', text[:1000].lower())
+    if city_state_match_top:
+        city = city_state_match_top.group(1).strip().split('\n')[-1].title()
+        # 🎯 THE FIX: Block tech terms like "CD Pipelines" from becoming cities!
+        if "pipeline" not in city.lower() and "server" not in city.lower() and "database" not in city.lower():
+            state_code = city_state_match_top.group(2).lower()
+            return f"{city}, {STATE_MAPPING.get(state_code, state_code.upper())} (USA)"
 
     us_states_full = r'\b(alabama|alaska|arizona|arkansas|california|colorado|connecticut|delaware|florida|georgia|hawaii|idaho|illinois|indiana|iowa|kansas|kentucky|louisiana|maine|maryland|massachusetts|michigan|minnesota|mississippi|missouri|montana|nebraska|nevada|new hampshire|new jersey|new mexico|new york|north carolina|north dakota|ohio|oklahoma|oregon|pennsylvania|rhode island|south carolina|south dakota|tennessee|texas|utah|vermont|virginia|washington|west virginia|wisconsin|wyoming)\b'
     us_cities = r'\b(los angeles|chicago|houston|phoenix|philadelphia|san antonio|san diego|dallas|san jose|austin|jacksonville|fort worth|columbus|san francisco|charlotte|indianapolis|seattle|denver|boston|el paso|nashville|detroit|oklahoma city|portland|las vegas|memphis|louisville|baltimore|milwaukee|albuquerque|tucson|fresno|sacramento|kansas city|mesa|atlanta|omaha|colorado springs|raleigh|miami|oakland|minneapolis|tulsa|bakersfield|wichita|arlington|ny|la|sf)\b'
@@ -198,9 +204,6 @@ def extract_location(text: str, phone: str = "") -> str:
     
     city_match = re.search(us_cities, search_lower)
     if city_match: return f"{city_match.group(1).title()} (USA)"
-        
-    state_match = re.search(us_states_full, search_lower)
-    if state_match: return f"{state_match.group(1).title()} (USA)"
 
     ind_city_match = re.search(india_cities, search_lower)
     if ind_city_match: return f"{ind_city_match.group(1).title()} (India)"
@@ -223,7 +226,6 @@ def analyze_experience(text: str) -> dict:
             break
 
     current_year = datetime.datetime.now().year
-    
     date_ranges = re.findall(r'\b((?:19|20)\d{2})\s*(?:[-–]|to)\s*((?:19|20)\d{2}|present|current|now)\b', text, re.IGNORECASE)
     
     if not date_ranges:
@@ -268,7 +270,7 @@ def analyze_experience(text: str) -> dict:
         "total_gap_years": float(gaps)
     }
 
-def classify_resume(text: str) -> dict:
+def classify_resume(text: str, filename: str = "") -> dict:
     all_skills = extract_all_skills(text)
     summary = generate_summary(text)
     impact_score = extract_impact_metrics(text)
@@ -286,7 +288,7 @@ def classify_resume(text: str) -> dict:
     else: fake_full_stack = False
 
     return {
-        "name": extract_name(text),
+        "name": extract_name(text, filename),
         "email": extract_email(text),
         "phone": extract_phone(text),
         "location": extract_location(text, extract_phone(text)),

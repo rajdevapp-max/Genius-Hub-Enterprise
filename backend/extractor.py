@@ -1,13 +1,13 @@
 """
 extractor.py — High-Speed PDF/DOCX Processing Engine
-Features: Auto-Timeout Bypass, Multi-threading, DB Sync, Vector Embedding.
+Features: Multi-threading, DB Sync, Vector Embedding. Deadlocks removed.
 """
 import os
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 os.environ["OMP_NUM_THREADS"] = "1"
 
 import time
-from concurrent.futures import ThreadPoolExecutor, as_completed, TimeoutError
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from tqdm import tqdm
 import json
 
@@ -16,23 +16,7 @@ from parser import extract_full, calculate_visual_score, extract_certificates
 from classifier import classify_resume
 from embedder import resume_index
 
-# --- THE FIX: DISPOSABLE SCOUT THREADS ---
-def safe_extract(file_path):
-    """Runs extraction in a disposable thread. If it freezes, we sever it and survive."""
-    executor = ThreadPoolExecutor(max_workers=1)
-    future = executor.submit(extract_full, file_path)
-    try:
-        # Give it 15 seconds. If it takes longer, it's an infinite loop/zombie file.
-        return future.result(timeout=15) 
-    except TimeoutError:
-        executor.shutdown(wait=False, cancel_futures=True)
-        raise Exception("⏱️ TIMEOUT: File is fundamentally corrupted or trapped in an infinite loop. Safely bypassed.")
-    except Exception as e:
-        executor.shutdown(wait=False, cancel_futures=True)
-        raise e
-
 def process_resume(file_path: str) -> dict:
-    # Print the file we are currently attacking
     print(f"👉 Extracting: {os.path.basename(file_path)}", flush=True)
     
     db = SessionLocal()
@@ -42,14 +26,15 @@ def process_resume(file_path: str) -> dict:
         if existing:
             return {"message": "Already processed", "id": existing.id, "name": existing.name}
 
-        # --- USING THE NEW SAFE EXTRACTOR ---
-        parsed_data = safe_extract(file_path)
+        # 🎯 THE FIX: Removed the nested ThreadPool to prevent GIL Deadlocks!
+        parsed_data = extract_full(file_path)
         
         raw_text = parsed_data.get("text", "")
         if not raw_text.strip():
             return {"error": f"Could not extract text from {filename}"}
 
-        ai_data = classify_resume(raw_text)
+        # 🎯 THE FIX: Successfully passing 'filename' so the Name Fallback actually works!
+        ai_data = classify_resume(raw_text, filename)
         visual_score = calculate_visual_score(raw_text, parsed_data)
         certs = extract_certificates(raw_text)
 
@@ -89,7 +74,6 @@ def process_resume(file_path: str) -> dict:
         return {"message": "Success", "id": resume.id, "name": resume.name}
     
     except Exception as e:
-        # If it fails or times out, we catch it here and keep the batch moving!
         print(f"\n[BYPASSED] Skipped {os.path.basename(file_path)}: {str(e)}", flush=True)
         return {"error": str(e)}
     finally:
@@ -97,7 +81,7 @@ def process_resume(file_path: str) -> dict:
 
 def batch_process(file_paths: list[str], max_workers: int = 6) -> list[dict]:
     results = []
-    safe_workers = min(max_workers, 3) # Hard cap at 3 to keep RAM stable
+    safe_workers = min(max_workers, 3) 
     
     print(f"\n[batch] Launching Multi-Core Engine ({safe_workers} threads) for {len(file_paths)} files...", flush=True)
     
@@ -109,7 +93,7 @@ def batch_process(file_paths: list[str], max_workers: int = 6) -> list[dict]:
                     res = future.result()
                     results.append(res)
                 except Exception as e:
-                    pass # Thread errors won't crash the progress bar anymore
+                    pass 
                 pbar.update(1)
     
     if hasattr(resume_index, "force_save_to_disk"):
