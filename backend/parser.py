@@ -1,13 +1,13 @@
 """
-parser.py — Enhanced Resume Parser v13.0
-Extracts text, hyperlinks, images, fonts, certificates.
-Features: Anti-Cheat Detection, Deep XML Salvage, Legacy .doc Binary Ripper, Broken PDF Salvage, Auto-Kill Switch, and DEEP TABLE EXTRACTION.
+parser.py — Enhanced Resume Parser v14.0
+Extracts text, hyperlinks, images, fonts, certificates, and DEEP PDF/DOCX TABLES.
+Table data is prioritized at the TOP of the document for accurate NER extraction.
 """
 import os
 import re
 import hashlib
 import zipfile
-import fitz  # PyMuPDF
+import fitz
 import pdfplumber
 from docx import Document
 from PIL import Image
@@ -34,9 +34,19 @@ def extract_text_from_pdf(file_path: str) -> dict:
         all_text = []
         MAX_PAGES = 10 
         
+        # 🎯 THE FIX: Extract tables FIRST and put them at the top of the text block!
+        try:
+            with pdfplumber.open(file_path) as pdf:
+                for page in pdf.pages[:MAX_PAGES]:
+                    tables = page.extract_tables()
+                    for table in tables:
+                        for row in table:
+                            row_text = " | ".join([str(cell).replace('\n', ' ').strip() for cell in row if cell])
+                            if row_text: all_text.append(row_text)
+        except: pass
+
         for page_num in range(min(len(doc), MAX_PAGES)):
             page = doc[page_num]
-            
             for link in page.get_links():
                 uri = link.get("uri", "")
                 if uri and uri.startswith("http"): result["hyperlinks"].append(uri)
@@ -73,9 +83,9 @@ def extract_text_from_pdf(file_path: str) -> dict:
                             ocr_text = pytesseract.image_to_string(Image.open(io.BytesIO(base_img["image"])), timeout=15)
                             if ocr_text.strip(): all_text.append(ocr_text)
                     except Exception as ocr_e:
-                        pass 
-        
+                        pass
         doc.close()
+
         result["text"] = "\n".join(all_text).strip()
         
         serialized_fonts = {}
@@ -102,7 +112,6 @@ def extract_text_from_pdf(file_path: str) -> dict:
                     result["text"] = " ".join([s.decode('ascii', errors='ignore') for s in strings])
             except Exception as bin_e:
                 pass
-
     return result
 
 def extract_text_from_docx(file_path: str) -> dict:
@@ -110,24 +119,10 @@ def extract_text_from_docx(file_path: str) -> dict:
     try:
         doc = Document(file_path)
         texts = []
+        table_texts = []
         font_set = {}
-        MAX_PARAGRAPHS = 500
         
-        # 🎯 1. EXTRACT NORMAL PARAGRAPHS
-        for i, para in enumerate(doc.paragraphs):
-            if i > MAX_PARAGRAPHS: break
-            if para.text.strip():
-                texts.append(para.text.strip())
-            
-            for run in para.runs:
-                if run.font.color and run.font.color.rgb and str(run.font.color.rgb) == "FFFFFF" and run.text.strip():
-                    result["fraud_flag"] = 1; result["fraud_reason"] = "Detected invisible (white) text in Word Document."
-                fname = run.font.name or "default"
-                fsize = run.font.size.pt if run.font.size else 0
-                if fname not in font_set: font_set[fname] = {"sizes": set(), "count": 0}
-                font_set[fname]["sizes"].add(round(fsize, 1)); font_set[fname]["count"] += 1
-        
-        # 🎯 2. THE FIX: EXTRACT TABLES (This is where Names and Skills were hiding!)
+        # 🎯 THE FIX: Extract tables FIRST so header data is at the top!
         for table in doc.tables:
             for row in table.rows:
                 row_data = []
@@ -136,10 +131,21 @@ def extract_text_from_docx(file_path: str) -> dict:
                     if clean_cell and clean_cell not in row_data: 
                         row_data.append(clean_cell)
                 if row_data:
-                    # Join table cells with a space so the AI can read it like a sentence
-                    texts.append(" | ".join(row_data))
-
-        # 3. EXTRACT HYPERLINKS & IMAGES
+                    table_texts.append(" | ".join(row_data))
+        
+        MAX_PARAGRAPHS = 500
+        for i, para in enumerate(doc.paragraphs):
+            if i > MAX_PARAGRAPHS: break
+            if para.text.strip():
+                texts.append(para.text)
+            for run in para.runs:
+                if run.font.color and run.font.color.rgb and str(run.font.color.rgb) == "FFFFFF" and run.text.strip():
+                    result["fraud_flag"] = 1; result["fraud_reason"] = "Detected invisible (white) text in Word Document."
+                fname = run.font.name or "default"
+                fsize = run.font.size.pt if run.font.size else 0
+                if fname not in font_set: font_set[fname] = {"sizes": set(), "count": 0}
+                font_set[fname]["sizes"].add(round(fsize, 1)); font_set[fname]["count"] += 1
+        
         for para in doc.paragraphs:
             for elem in para._element.iter():
                 if elem.tag.endswith("}hyperlink"):
@@ -151,8 +157,8 @@ def extract_text_from_docx(file_path: str) -> dict:
         for rel in doc.part.rels.values():
             if "image" in rel.reltype: result["has_image"] = True; break
         
-        # Put the extracted text together! We put the tables at the TOP because names are usually in the first table.
-        result["text"] = "\n".join(texts).strip()
+        final_text = table_texts + texts
+        result["text"] = "\n".join(final_text).strip()
         result["fonts"] = {fname: {"sizes": sorted(list(fdata["sizes"])), "count": fdata["count"]} for fname, fdata in font_set.items()}
         
     except Exception as e:
@@ -170,7 +176,6 @@ def extract_text_from_docx(file_path: str) -> dict:
                     result["text"] = " ".join([s.decode('ascii', errors='ignore') for s in strings])
         except Exception as salvage_e:
             pass
-            
     return result
 
 def extract_text_from_image(file_path: str) -> dict:
@@ -194,6 +199,8 @@ def extract_full(file_path: str) -> dict:
     data["file_hash"] = file_hash(file_path)
     data["word_count"] = len(data["text"].split())
     return data
+
+def extract_text(file_path: str) -> str: return extract_full(file_path)["text"]
 
 def calculate_visual_score(text: str, metadata: dict = None) -> float:
     score = 40.0

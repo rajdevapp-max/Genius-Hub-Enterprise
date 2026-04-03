@@ -7,14 +7,12 @@ import zipfile
 import shutil
 from huggingface_hub import hf_hub_download
 
-# MODIFIED: Critical pre-imports for Hugging Face multi-core compatibility
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 os.environ["OMP_NUM_THREADS"] = "1"
 
 from dotenv import load_dotenv
 load_dotenv()
 
-# --- 1. CLOUD SYNC MUST RUN FIRST ---
 def sync_cloud_resumes():
     token = os.environ.get("HF_TOKEN")
     if not token:
@@ -23,15 +21,12 @@ def sync_cloud_resumes():
         
     print("☁️ Syncing Cloud Database & Search Index...", flush=True)
     try:
-        # 1. Sync SQLite DB
         db_path = hf_hub_download(repo_id="Vinu019/company-resumes", filename="resumes.db", repo_type="dataset", token=token)
         shutil.copy(db_path, "resumes.db")
         
-        # 2. Sync FAISS Vector Index
         index_path = hf_hub_download(repo_id="Vinu019/company-resumes", filename="faiss_index.bin", repo_type="dataset", token=token)
         shutil.copy(index_path, "faiss_index.bin")
 
-        # 3. Sync Resume Files (ZIP)
         zip_path = hf_hub_download(repo_id="Vinu019/company-resumes", filename="resumes.zip", repo_type="dataset", token=token)
         with zipfile.ZipFile(zip_path, 'r') as zip_ref:
             zip_ref.extractall("resumes")
@@ -40,9 +35,8 @@ def sync_cloud_resumes():
     except Exception as e:
         print(f"⚠️ Cloud Sync failed: {e}", flush=True)
 
-sync_cloud_resumes() # Launch sync
+sync_cloud_resumes() 
 
-# --- 2. NOW WE IMPORT THE AI MODULES SO THEY SEE THE NEW FILES ---
 import json
 import time
 import re
@@ -56,7 +50,6 @@ import io
 from datetime import datetime
 from sqlalchemy import or_
 
-# Local imports (must be after sync and initialization)
 from database import init_db, SessionLocal, Resume
 from embedder import resume_index
 from extractor import process_resume, batch_process
@@ -64,7 +57,6 @@ from classifier import classify_resume, extract_skills_regex, extract_all_skills
 from watcher import start_watcher_thread, get_watcher_stats
 from dedup import find_duplicates, remove_duplicates, scan_folder_duplicates
 
-# Initialize DB and Watcher
 init_db()
 start_watcher_thread()
 
@@ -79,7 +71,6 @@ app.add_middleware(
 RESUME_DIR = os.environ.get("RESUME_DIR", "resumes")
 os.makedirs(RESUME_DIR, exist_ok=True)
 
-# Strict location patterns for reliable filtering
 GEO_MAPPING = {
     "india": ["india", "maharashtra", "mumbai", "delhi", "bangalore", "bengaluru", "karnataka", "hyderabad", "telangana", "chennai", "tamil nadu", "pune", "gurgaon", "gurugram", "noida", "up", "uttar pradesh", "gujarat", "ahmedabad", "kolkata", "rohtak", "haryana", "punjab", "chandigarh", "rajasthan", "kerala", "kochi", "trivandrum"],
     "usa": ["usa", "us", "united states", "america", "ny", "new york", "ca", "california", "sf", "san francisco", "texas", "tx", "austin", "dallas", "houston", "washington", "wa", "florida", "fl", "miami", "chicago", "il", "illinois", "boston", "ma", "colorado", "atlanta", "nc", "nj", "va", "oh", "ga", "mi", "az", "md", "co", "mn", "in", "wi", "tn", "mo", "ct", "ut", "sc", "nv", "or", "al", "ak", "ar", "de", "hi", "id", "ia", "ks", "ky", "la", "me", "ms", "mt", "ne", "nh", "nm", "nd", "ok", "pa", "ri", "sd", "vt", "wv", "wy"],
@@ -108,10 +99,8 @@ class SearchRequest(BaseModel):
 class JDMatchRequest(BaseModel):
     job_description: str
     top_k: int = 100
-    # MODIFIED: Added location to request model for JD matching
     location: str = ""
 
-# MODIFIED: Corrected function signature and logic for strict location matching
 def match_location(req_loc: str, resume_loc: str) -> bool:
     if not req_loc: return True
     req_loc = req_loc.lower().strip()
@@ -119,7 +108,6 @@ def match_location(req_loc: str, resume_loc: str) -> bool:
     search_terms = GEO_MAPPING.get(req_loc, [req_loc])
     if req_loc not in search_terms: search_terms.append(req_loc)
     for term in search_terms:
-        # MODIFIED: Added defensive regex word boundary matching for higher accuracy
         if re.search(r'\b' + re.escape(term) + r'\b', res_loc): return True
     return False
 
@@ -392,7 +380,6 @@ def match_jd(req: JDMatchRequest):
             resume = db.query(Resume).get(rid)
             if not resume: continue 
 
-            # MODIFIED: Integrated location filtering for JD matching
             if req.location and not match_location(req.location, resume.location): 
                 continue
 
@@ -410,7 +397,6 @@ def match_jd(req: JDMatchRequest):
                 
             candidates.append(d)
 
-        # Legacy fallback if vector search is too small
         if len(candidates) < req.top_k and extracted_reqs:
             conditions = []
             for sk in extracted_reqs[:8]: 
@@ -421,7 +407,6 @@ def match_jd(req: JDMatchRequest):
                 fallback = db.query(Resume).filter(or_(*conditions)).limit(req.top_k).all()
                 for r in fallback:
                     if r.id not in existing_ids:
-                        # MODIFIED: Defensive location filtering in fallback search
                         if req.location and not match_location(req.location, r.location): continue
                         existing_ids.add(r.id)
                         d = _resume_to_dict(
@@ -455,7 +440,6 @@ def root(): return {"status": "ok"}
 @app.get("/api/duplicates")
 def get_duplicates(): return {"db_duplicates": find_duplicates(), "folder_duplicates": scan_folder_duplicates(), "total_duplicate_groups": len(find_duplicates()), "total_duplicate_files": sum(d["count"] - 1 for d in find_duplicates())}
 
-# MODIFIED: Changed route from POST /api/resumes to POST /api/duplicates/remove for safety
 @app.post("/api/duplicates/remove")
 def remove_dupes(dry_run: bool = Query(False)): return remove_duplicates(dry_run=dry_run)
 
@@ -565,7 +549,29 @@ async def upload_batch(files: list[UploadFile] = File(...)):
         saved.append({"name": file.filename})
     return {"message": f"Successfully received {len(saved)} resumes. Engine is extracting data.", "results": saved}
 
+# 🎯 THE FIX: Changed from DELETE to POST to bypass cloud proxy firewalls blocking delete commands!
+@app.post("/api/candidate/{resume_id}/delete")
+def delete_resume(resume_id: int):
+    db = SessionLocal()
+    try:
+        resume = db.query(Resume).get(resume_id)
+        if not resume: raise HTTPException(404, "Resume not found")
+        
+        file_path = os.path.join(RESUME_DIR, resume.filename)
+        if os.path.exists(file_path):
+            try: os.remove(file_path)
+            except: pass 
+            
+        db.delete(resume)
+        db.commit()
+        
+        if hasattr(resume_index, 'remove'):
+            try: resume_index.remove(resume_id)
+            except: pass
+            
+        return {"message": "Successfully deleted profile", "id": resume_id}
+    finally: db.close()
+
 if __name__ == "__main__":
     import uvicorn
-    # Vercel-compatible startup, binding to all interfaces and port 7860
     uvicorn.run(app, host="0.0.0.0", port=7860)

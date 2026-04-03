@@ -1,3 +1,6 @@
+// api.ts — Unified API Client Layer v30.0
+// Features: Infinite Demo Routing, Vercel multi-project routing, and correct endpoint definitions.
+
 import type { SearchRequest, SearchResponse, JDMatchRequest, JDMatchResponse, StatsResponse, UploadResponse, LiveStatus, Candidate } from './types';
 
 // --- STRICT ROUTING LOGIC ---
@@ -110,11 +113,12 @@ export const api = {
     return res.json();
   },
 
+  // 🎯 THE FIX: Send a POST request to bypass strict cloud proxy firewalls!
   deleteCandidate: (id: number) =>
-    apiFetch<{ message: string }>(`/api/candidate/${id}`, { method: 'DELETE' }),
+    apiFetch<{ message: string }>(`/api/candidate/${id}/delete`, { method: 'POST' }),
 
   deleteResume: (id: number) =>
-    apiFetch<{ message: string }>(`/api/candidate/${id}`, { method: 'DELETE' }),
+    apiFetch<{ message: string }>(`/api/candidate/${id}/delete`, { method: 'POST' }),
 
   exportCSV: (ids?: number[]) =>
     `${API_URL}/api/export${ids?.length ? `?ids=${ids.join(',')}` : ''}`,
