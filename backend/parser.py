@@ -1,6 +1,7 @@
 """
-parser.py — Enhanced Resume Parser v14.1
-Extracts text, hyperlinks, images, fonts, certificates, and DEEP PDF/DOCX TABLES.
+parser.py — Enhanced Resume Parser v15.0
+Extracts text, hyperlinks, images, fonts, certificates.
+Features: Deep PDF Table alignment, Horizontal block sorting to protect invisible grids.
 """
 import os
 import re
@@ -39,8 +40,7 @@ def extract_text_from_pdf(file_path: str) -> dict:
                     tables = page.extract_tables()
                     for table in tables:
                         for row in table:
-                            # 🎯 THE FIX: Replace \n with | to separate merged table cells safely!
-                            row_text = " | ".join([str(cell).replace('\n', ' | ').strip() for cell in row if cell])
+                            row_text = " | ".join([str(cell).replace('\n', ' ').strip() for cell in row if cell])
                             if row_text: all_text.append(row_text)
         except: pass
 
@@ -50,6 +50,7 @@ def extract_text_from_pdf(file_path: str) -> dict:
                 uri = link.get("uri", "")
                 if uri and uri.startswith("http"): result["hyperlinks"].append(uri)
             
+            # 🎯 THE FIX: Force strict left-to-right horizontal sorting to emulate tables!
             blocks = page.get_text("blocks")
             blocks.sort(key=lambda b: (round(b[1], -1), b[0]))
             page_text = [b[4].strip() for b in blocks if b[6] == 0 and b[4].strip()]
@@ -125,7 +126,6 @@ def extract_text_from_docx(file_path: str) -> dict:
             for row in table.rows:
                 row_data = []
                 for cell in row.cells:
-                    # 🎯 THE FIX: Replace \n with | to separate merged table cells safely!
                     clean_cell = cell.text.strip().replace('\n', ' | ')
                     if clean_cell and clean_cell not in row_data: 
                         row_data.append(clean_cell)

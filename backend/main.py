@@ -1,6 +1,6 @@
 """
-main.py — Vercel-Compatible Backend API v30.0
-Features: Multi-threading extractor, FAISS vector search, strict location hierarchy, and mathematical job gap calculator.
+main.py — Vercel-Compatible Backend API v31.0
+Features: Multi-threading extractor, FAISS vector search, strict location hierarchy.
 """
 import os
 import zipfile
@@ -60,7 +60,7 @@ from dedup import find_duplicates, remove_duplicates, scan_folder_duplicates
 init_db()
 start_watcher_thread()
 
-app = FastAPI(title="Resume AI Intelligence Platform", version="30.0")
+app = FastAPI(title="Resume AI Intelligence Platform", version="31.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -101,14 +101,19 @@ class JDMatchRequest(BaseModel):
     top_k: int = 100
     location: str = ""
 
-def match_location(req_loc: str, resume_loc: str) -> bool:
+def match_location(req_loc: str, resume_loc: str, raw_text: str = "") -> bool:
     if not req_loc: return True
     req_loc = req_loc.lower().strip()
     res_loc = (resume_loc or "").lower()
+    r_text = (raw_text or "").lower()
+    
     search_terms = GEO_MAPPING.get(req_loc, [req_loc])
     if req_loc not in search_terms: search_terms.append(req_loc)
+    
     for term in search_terms:
-        if re.search(r'\b' + re.escape(term) + r'\b', res_loc): return True
+        pattern = r'\b' + re.escape(term) + r'\b'
+        if re.search(pattern, res_loc) or re.search(pattern, r_text): 
+            return True
     return False
 
 def extract_snippet(text: str, keyword: str, window: int = 60) -> str:
@@ -312,9 +317,11 @@ def search_resumes(req: SearchRequest):
             resume = db.query(Resume).get(rid)
             if not resume: continue
 
-            if detected_location and not match_location(detected_location, resume.location): continue
-
             raw_text = (resume.raw_text or "").lower()
+
+            # 🎯 JD Match Sync: AI Search now uses the exact same `match_location` logic
+            if detected_location and not match_location(detected_location, resume.location, raw_text): continue
+
             skills_text_lower = (resume.skills or "").lower()
             links_str = "".join(json.loads(resume.hyperlinks) if resume.hyperlinks else []).lower()
             certs_str = "".join(json.loads(resume.certificates) if resume.certificates else []).lower()
@@ -380,7 +387,7 @@ def match_jd(req: JDMatchRequest):
             resume = db.query(Resume).get(rid)
             if not resume: continue 
 
-            if req.location and not match_location(req.location, resume.location): 
+            if req.location and not match_location(req.location, resume.location, resume.raw_text): 
                 continue
 
             existing_ids.add(rid)
@@ -407,7 +414,7 @@ def match_jd(req: JDMatchRequest):
                 fallback = db.query(Resume).filter(or_(*conditions)).limit(req.top_k).all()
                 for r in fallback:
                     if r.id not in existing_ids:
-                        if req.location and not match_location(req.location, r.location): continue
+                        if req.location and not match_location(req.location, r.location, r.raw_text): continue
                         existing_ids.add(r.id)
                         d = _resume_to_dict(
                             r, 
@@ -549,7 +556,6 @@ async def upload_batch(files: list[UploadFile] = File(...)):
         saved.append({"name": file.filename})
     return {"message": f"Successfully received {len(saved)} resumes. Engine is extracting data.", "results": saved}
 
-# 🎯 THE FIX: Changed from DELETE to POST to bypass cloud proxy firewalls blocking delete commands!
 @app.post("/api/candidate/{resume_id}/delete")
 def delete_resume(resume_id: int):
     db = SessionLocal()
