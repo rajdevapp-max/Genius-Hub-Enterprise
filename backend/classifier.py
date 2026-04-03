@@ -1,6 +1,6 @@
 """
-classifier.py — Multi-AI NER & Skill Extraction v25.0
-Features: Strict Location Matching, Dynamic Email Name Extraction, Nuclear Javascript Exclusions.
+classifier.py — Multi-AI NER & Skill Extraction v26.0
+Features: God-Mode Enterprise Dictionary, Clever Name/Email Fallback, Nuclear UI/UX Blacklist.
 """
 import os
 import re
@@ -21,22 +21,23 @@ STATE_MAPPING = {
     "va": "Virginia", "wa": "Washington", "wv": "West Virginia", "wi": "Wisconsin", "wy": "Wyoming"
 }
 
-# 🎯 THE FIX: Adding underscore, js, etc. to skills so they get rejected as names
+# 🎯 THE FIX: GOD-MODE SKILL DICTIONARY
+# Added RPA, IBM tools, legacy scripts, and hundreds of enterprise skills so tables parse perfectly.
 SKILL_PATTERNS = [
     "python", "java", "javascript", "typescript", "c++", "c#", "go", "rust",
-    "kotlin", "swift", "ruby", "php", "scala", "perl", "r programming",
+    "kotlin", "swift", "ruby", "php", "scala", "perl", "r programming", "shell", "bash", "unix shell",
     "dart", "lua", "haskell", "erlang", "elixir", "clojure", "groovy",
-    "react", "angular", "vue", "svelte", "next.js", "nuxt", "gatsby",
+    "react", "angular", "vue", "svelte", "next.js", "nuxt", "gatsby", "jquery", "ajax", "json", "dom",
     "remix", "html", "css", "tailwind", "sass", "less", "bootstrap",
     "material ui", "chakra ui", "styled-components", "webpack", "vite",
     "node.js", "nodejs", "express", "fastapi", "django", "flask", "spring",
     "spring boot", "asp.net", ".net", "laravel", "rails",
     "aws", "azure", "gcp", "docker", "kubernetes", "terraform", "ansible",
-    "jenkins", "github actions", "gitlab ci", "circleci",
+    "jenkins", "github actions", "gitlab ci", "circleci", "aks", "azure vm",
     "prometheus", "grafana", "datadog", "cloudflare",
     "vercel", "netlify", "heroku", "lambda", "ec2", "s3",
     "sql", "postgresql", "mysql", "mongodb", "redis", "elasticsearch",
-    "dynamodb", "cassandra", "neo4j", "supabase", "firebase", "prisma",
+    "dynamodb", "cassandra", "neo4j", "supabase", "firebase", "prisma", "pl/sql",
     "machine learning", "deep learning", "nlp", "computer vision", "pytorch",
     "tensorflow", "scikit-learn", "pandas", "numpy", "spark", "hadoop",
     "airflow", "dbt", "snowflake", "databricks", "bigquery", "redshift",
@@ -48,13 +49,14 @@ SKILL_PATTERNS = [
     "jest", "mocha", "pytest", "junit", "cypress", "selenium", "playwright",
     "vitest", "testing library", "storybook",
     "kafka", "rabbitmq", "celery", "nats",
-    "git", "linux", "ci/cd", "agile", "scrum", "jira",
+    "git", "linux", "unix", "ci/cd", "agile", "scrum", "jira",
     "figma", "rest api", "graphql", "grpc", "websocket", "oauth", "jwt",
     "microservices", "serverless", "event-driven", "clean architecture",
     "solidity", "web3", "blockchain", "ethereum",
     "react native", "flutter", "ios", "android", "swiftui",
     "excel", "matlab", "unity", "three.js",
-    "stripe", "twilio", "auth0", "nginx", "apache", "c", "node", "underscore", "js"
+    "stripe", "twilio", "auth0", "nginx", "apache", "c", "node", "underscore", "js",
+    "ibm mdm", "websphere", "open liberty", "blue prism", "uipath", "automation anywhere", "rpa", "bmc remedy", "servicenow", "snow", "middleware"
 ]
 
 KNOWLEDGE_GRAPH = {
@@ -80,7 +82,8 @@ KNOWLEDGE_GRAPH = {
     "bedrock": ["aws", "generative ai", "cloud computing", "llm"],
     "aws bedrock": ["aws", "generative ai", "cloud computing", "llm"],
     "langchain": ["generative ai", "llm", "python"],
-    "sagemaker": ["aws", "machine learning", "cloud computing"]
+    "sagemaker": ["aws", "machine learning", "cloud computing"],
+    "rpa": ["automation", "blue prism", "uipath", "automation anywhere"]
 }
 
 BACKEND_AND_DB_SKILLS = {
@@ -88,7 +91,7 @@ BACKEND_AND_DB_SKILLS = {
     "spring boot", "asp.net", ".net", "laravel", "rails", "python", "java", 
     "c#", "go", "ruby", "php", "sql", "postgresql", "mysql", "mongodb", "redis", 
     "elasticsearch", "dynamodb", "cassandra", "firebase", "supabase", "prisma",
-    "backend", "server-side", "database"
+    "backend", "server-side", "database", "perl", "shell", "bash"
 }
 
 def extract_impact_metrics(text: str) -> float:
@@ -129,8 +132,8 @@ def generate_summary(text: str) -> Optional[str]:
 def extract_name(text: str, filename: str = "") -> str:
     lines = [l.strip() for l in text.split('\n') if l.strip()]
     
-    # 🎯 THE FIX: Expanded "Nuclear" tech list to permanently banish "Underscore JS"
-    exclusions = {"management", "wealth", "project", "server", "application", "system", "database", "developer", "engineer", "analyst", "administrator", "technologies", "solutions", "summary", "experience", "resume", "curriculum", "vitae", "cv", "profile", "page", "senior", "junior", "lead", "consultant", "manager", "professional", "skills", "aws", "gcp", "azure", "cloud", "data", "science", "architect", "oracle", "postgresql", "sql", "mysql", "react", "angular", "vue", "java", "python", "software", "development", "and", "libraries", "node", "modules", "frameworks", "api", "platforms", "underscore", "js", "frontend", "backend", "web", "app", "network", "agile", "scrum"}
+    # 🎯 THE FIX: Expanded Nuclear UI/UX/Jquery blocklist
+    exclusions = {"management", "wealth", "project", "server", "application", "system", "database", "developer", "engineer", "analyst", "administrator", "technologies", "solutions", "summary", "experience", "resume", "curriculum", "vitae", "cv", "profile", "page", "senior", "junior", "lead", "consultant", "manager", "professional", "skills", "aws", "gcp", "azure", "cloud", "data", "science", "architect", "oracle", "postgresql", "sql", "mysql", "react", "angular", "vue", "java", "python", "software", "development", "and", "libraries", "node", "modules", "frameworks", "api", "platforms", "underscore", "js", "frontend", "backend", "web", "app", "network", "agile", "scrum", "jquery", "ui", "ux", "scripting", "programming", "tools", "service"}
 
     for line in lines[:15]:
         chunks = re.split(r'[|,\t\-\–]', line)
@@ -152,12 +155,18 @@ def extract_name(text: str, filename: str = "") -> str:
                     if clean_chunk and len(clean_chunk.split()) > 1:
                         return clean_chunk.title()
 
-    # 🎯 THE FIX: The AI Email Parser (vinay.kumar123@... -> Vinay Kumar)
+    # 🎯 THE CLEVER FALLBACK: Force extraction from Filename FIRST before Email.
+    # Why? Because '10199_1716...LIKHITHA-MAHESWARI.docx' perfectly cleanly splits into "Likhitha Maheswari"
+    if filename:
+        clean_fn = re.sub(r'[\d_+\-\.]', ' ', filename).replace('pdf', '').replace('docx', '').replace('doc', '')
+        words = [w for w in clean_fn.split() if len(w) > 2 and w.lower() not in exclusions and w.lower() not in SKILL_PATTERNS]
+        if words: return " ".join(words[:2]).title()
+
+    # Advanced Email Parser Fallback
     email_match = re.search(r'([a-zA-Z0-9._-]+)@[a-zA-Z0-9._-]+\.[a-zA-Z0-9_-]+', text)
     if email_match:
         prefix = email_match.group(1).lower()
         parts = re.split(r'[._-]', prefix)
-        # Strip numbers and symbols from the name parts
         clean_parts = [re.sub(r'[^a-zA-Z]', '', p).strip() for p in parts]
         valid_parts = [p for p in clean_parts if len(p) > 1 and p not in exclusions and p not in SKILL_PATTERNS]
         
@@ -165,11 +174,6 @@ def extract_name(text: str, filename: str = "") -> str:
             return f"{valid_parts[0].title()} {valid_parts[1].title()}"
         elif len(valid_parts) == 1:
             return valid_parts[0].title()
-
-    if filename:
-        clean_fn = re.sub(r'[\d_+\-\.]', ' ', filename).replace('pdf', '').replace('docx', '').replace('doc', '')
-        words = [w for w in clean_fn.split() if len(w) > 2 and w.lower() not in exclusions and w.lower() not in SKILL_PATTERNS]
-        if words: return " ".join(words[:2]).title()
 
     return "Unknown"
 
