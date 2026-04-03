@@ -1,13 +1,12 @@
 """
 extractor.py — High-Speed PDF/DOCX Processing Engine
-Features: Multi-threading, DB Sync, Vector Embedding. Deadlocks removed.
+Features: Sequential Processing to guarantee 100% stability against Segfaults.
 """
 import os
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 os.environ["OMP_NUM_THREADS"] = "1"
 
 import time
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from tqdm import tqdm
 import json
 
@@ -26,14 +25,12 @@ def process_resume(file_path: str) -> dict:
         if existing:
             return {"message": "Already processed", "id": existing.id, "name": existing.name}
 
-        # 🎯 THE FIX: Removed the nested ThreadPool to prevent GIL Deadlocks!
         parsed_data = extract_full(file_path)
         
         raw_text = parsed_data.get("text", "")
         if not raw_text.strip():
             return {"error": f"Could not extract text from {filename}"}
 
-        # 🎯 THE FIX: Successfully passing 'filename' so the Name Fallback actually works!
         ai_data = classify_resume(raw_text, filename)
         visual_score = calculate_visual_score(raw_text, parsed_data)
         certs = extract_certificates(raw_text)
@@ -79,22 +76,19 @@ def process_resume(file_path: str) -> dict:
     finally:
         db.close()
 
-def batch_process(file_paths: list[str], max_workers: int = 6) -> list[dict]:
+# 🎯 THE FIX: Removed multithreading completely. Sequential processing is infinitely more stable for Hugging Face free tier.
+def batch_process(file_paths: list[str], max_workers: int = 1) -> list[dict]:
     results = []
-    safe_workers = min(max_workers, 3) 
+    print(f"\n[batch] Launching Sequential Engine for {len(file_paths)} files to guarantee stability...", flush=True)
     
-    print(f"\n[batch] Launching Multi-Core Engine ({safe_workers} threads) for {len(file_paths)} files...", flush=True)
-    
-    with ThreadPoolExecutor(max_workers=safe_workers) as executor:
-        futures = {executor.submit(process_resume, path): path for path in file_paths}
-        with tqdm(total=len(file_paths), desc="Processing Resumes", unit="res") as pbar:
-            for future in as_completed(futures):
-                try:
-                    res = future.result()
-                    results.append(res)
-                except Exception as e:
-                    pass 
-                pbar.update(1)
+    with tqdm(total=len(file_paths), desc="Processing Resumes", unit="res") as pbar:
+        for path in file_paths:
+            try:
+                res = process_resume(path)
+                results.append(res)
+            except Exception as e:
+                pass
+            pbar.update(1)
     
     if hasattr(resume_index, "force_save_to_disk"):
         resume_index.force_save_to_disk()

@@ -1,6 +1,6 @@
 """
-classifier.py — Multi-AI NER & Skill Extraction v21.2
-Features: Strict Location Hierarchy, ZIP Code pinpointing, and Bulletproof Name Extractor with Filename Fallback.
+classifier.py — Multi-AI NER & Skill Extraction v22.0
+Features: Segfault Safe, Strict Location Hierarchy, Expanded Name Exclusions.
 """
 import os
 import re
@@ -127,7 +127,9 @@ def generate_summary(text: str) -> Optional[str]:
 
 def extract_name(text: str, filename: str = "") -> str:
     lines = [l.strip() for l in text.split('\n') if l.strip()]
-    exclusions = {"management", "wealth", "project", "server", "application", "system", "database", "developer", "engineer", "analyst", "administrator", "technologies", "solutions", "summary", "experience", "resume", "curriculum", "vitae", "cv", "profile", "page", "senior", "junior", "lead", "consultant", "manager", "professional", "skills", "aws", "gcp", "azure", "cloud", "data", "science", "architect"}
+    
+    # 🎯 THE FIX: Added massive tech dictionary to prevent "Oracle And Postgresql" from being a name
+    exclusions = {"management", "wealth", "project", "server", "application", "system", "database", "developer", "engineer", "analyst", "administrator", "technologies", "solutions", "summary", "experience", "resume", "curriculum", "vitae", "cv", "profile", "page", "senior", "junior", "lead", "consultant", "manager", "professional", "skills", "aws", "gcp", "azure", "cloud", "data", "science", "architect", "oracle", "postgresql", "sql", "mysql", "react", "angular", "vue", "java", "python", "software", "development", "and"}
 
     for line in lines[:15]:
         chunks = re.split(r'[|,\t\-\–]', line)
@@ -138,7 +140,7 @@ def extract_name(text: str, filename: str = "") -> str:
                 continue
 
             words = chunk.split()
-            if 1 < len(words) <= 4:
+            if 1 < len(words) <= 5:
                 if any(w.lower() in exclusions for w in words): continue
                 cap_count = sum(1 for w in words if w and w[0].isupper() and w.isalpha())
                 if cap_count >= len(words) - 1 and cap_count > 0:
@@ -169,31 +171,44 @@ def extract_phone(text: str) -> str:
     return match.group(0) if match else ""
 
 def extract_location(text: str, phone: str = "") -> str:
-    search_block = text[:800].lower() 
+    # 🎯 THE FIX: Defined search_lower properly to prevent NameError crashing the app!
+    search_block = text[:1500] 
+    search_lower = search_block.lower()
+
+    global_pat = r'(?:Location|Address|City|Based in|Located in|From)[:\s]+([A-Za-z\s,]{2,40})'
+    global_match = re.search(global_pat, text[:1500], re.IGNORECASE)
+    if global_match:
+        extracted = global_match.group(1).strip().split('\n')[0][:50]
+        if extracted:
+            if "india" in extracted.lower() or "ind" in extracted.lower(): return f"{extracted} (India)"
+            if "usa" in extracted.lower() or "us" in extracted.lower(): return f"{extracted} (USA)"
+            return extracted
+
+    city_state_match_top = re.search(r'([a-z\s]{3,20}),\s*(al|ak|az|ar|ca|co|ct|de|fl|ga|hi|id|il|in|ia|ks|ky|la|me|md|ma|mi|mn|ms|mo|mt|ne|nv|nh|nj|nm|ny|nc|nd|oh|ok|or|pa|ri|sc|sd|tn|tx|ut|vt|va|wa|wv|wi|wy)\b', search_lower)
+    if city_state_match_top:
+        city = city_state_match_top.group(1).strip().split('\n')[-1].title()
+        if "pipeline" not in city.lower() and "server" not in city.lower() and "database" not in city.lower():
+            state_code = city_state_match_top.group(2).lower()
+            return f"{city}, {STATE_MAPPING.get(state_code, state_code.upper())} (USA)"
 
     if phone:
         clean_phone = re.sub(r'[^\d+]', '', phone)
         if clean_phone.startswith("+1"): return "USA"
         if clean_phone.startswith("+91") or (clean_phone.startswith("91") and len(clean_phone) == 12): return "India"
+        if clean_phone.startswith("+44"): return "UK"
+        if clean_phone.startswith("+61"): return "Australia"
         if len(clean_phone) == 10:
             area_code = clean_phone[:3]
+            if area_code[0] in "2345": return "USA"
             us_high_area_codes = {"602","603","605","606","607","608","609","610","612","614","615","616","617","618","619","620","623","626","628","630","631","636","646","650","651","657","660","661","662","669","678","682","701","702","703","704","706","707","708","712","713","714","715","716","717","718","719","720","724","727","731","732","734","740","743","747","754","757","760","763","770","772","773","774","775","779","781","785","786","787","801","802","803","804","805","806","808","810","812","813","814","815","816","817","818","828","830","831","832","843","845","847","848","850","856","857","858","859","860","862","863","864","865","870","872","878","901","903","904","906","907","908","909","910","912","913","914","915","916","917","918","919","920","925","928","929","931","936","937","938","940","941","947","949","951","952","954","956","959","970","971","972","973","978","979","980","984","985","989"}
             if area_code in us_high_area_codes: return "USA"
             if area_code[0] in "6789": return "India"
 
-    zip_match = re.search(r'\b([A-Z]{2})\s*(\d{5})\b', text[:800])
+    zip_match = re.search(r'\b([A-Z]{2})\s*(\d{5})\b', search_lower)
     if zip_match:
         state_code = zip_match.group(1).lower()
         if state_code in STATE_MAPPING:
             return f"{STATE_MAPPING[state_code]} (USA)"
-
-    city_state_match_top = re.search(r'([a-z\s]{3,20}),\s*(al|ak|az|ar|ca|co|ct|de|fl|ga|hi|id|il|in|ia|ks|ky|la|me|md|ma|mi|mn|ms|mo|mt|ne|nv|nh|nj|nm|ny|nc|nd|oh|ok|or|pa|ri|sc|sd|tn|tx|ut|vt|va|wa|wv|wi|wy)\b', text[:1000].lower())
-    if city_state_match_top:
-        city = city_state_match_top.group(1).strip().split('\n')[-1].title()
-        # 🎯 THE FIX: Block tech terms like "CD Pipelines" from becoming cities!
-        if "pipeline" not in city.lower() and "server" not in city.lower() and "database" not in city.lower():
-            state_code = city_state_match_top.group(2).lower()
-            return f"{city}, {STATE_MAPPING.get(state_code, state_code.upper())} (USA)"
 
     us_states_full = r'\b(alabama|alaska|arizona|arkansas|california|colorado|connecticut|delaware|florida|georgia|hawaii|idaho|illinois|indiana|iowa|kansas|kentucky|louisiana|maine|maryland|massachusetts|michigan|minnesota|mississippi|missouri|montana|nebraska|nevada|new hampshire|new jersey|new mexico|new york|north carolina|north dakota|ohio|oklahoma|oregon|pennsylvania|rhode island|south carolina|south dakota|tennessee|texas|utah|vermont|virginia|washington|west virginia|wisconsin|wyoming)\b'
     us_cities = r'\b(los angeles|chicago|houston|phoenix|philadelphia|san antonio|san diego|dallas|san jose|austin|jacksonville|fort worth|columbus|san francisco|charlotte|indianapolis|seattle|denver|boston|el paso|nashville|detroit|oklahoma city|portland|las vegas|memphis|louisville|baltimore|milwaukee|albuquerque|tucson|fresno|sacramento|kansas city|mesa|atlanta|omaha|colorado springs|raleigh|miami|oakland|minneapolis|tulsa|bakersfield|wichita|arlington|ny|la|sf)\b'
