@@ -56,7 +56,31 @@ SKILL_PATTERNS = [
     "stripe", "twilio", "auth0", "nginx", "apache", "c", "node"
 ]
 
-# Knowledge Graph remains unchanged
+KNOWLEDGE_GRAPH = {
+    "react": ["frontend", "javascript", "web development", "ui/ux"],
+    "angular": ["frontend", "javascript", "typescript", "web development"],
+    "vue": ["frontend", "javascript", "web development"],
+    "django": ["backend", "python", "web development"],
+    "fastapi": ["backend", "python", "api design"],
+    "node.js": ["backend", "javascript", "server-side"],
+    "nodejs": ["backend", "javascript", "server-side"],
+    "docker": ["devops", "containerization"],
+    "kubernetes": ["devops", "container orchestration", "cloud"],
+    "aws": ["cloud computing", "infrastructure"],
+    "azure": ["cloud computing", "infrastructure"],
+    "gcp": ["cloud computing", "infrastructure"],
+    "pytorch": ["deep learning", "machine learning", "artificial intelligence", "data science"],
+    "tensorflow": ["deep learning", "machine learning", "artificial intelligence", "data science"],
+    "pandas": ["data analysis", "data science", "python"],
+    "sql": ["database", "backend", "data engineering"],
+    "mongodb": ["nosql", "database", "backend"],
+    "react native": ["mobile development", "frontend", "ios", "android"],
+    "flutter": ["mobile development", "dart", "ios", "android"],
+    "bedrock": ["aws", "generative ai", "cloud computing", "llm"],
+    "aws bedrock": ["aws", "generative ai", "cloud computing", "llm"],
+    "langchain": ["generative ai", "llm", "python"],
+    "sagemaker": ["aws", "machine learning", "cloud computing"]
+}
 
 BACKEND_AND_DB_SKILLS = {
     "node.js", "nodejs", "express", "fastapi", "django", "flask", "spring", 
@@ -66,10 +90,40 @@ BACKEND_AND_DB_SKILLS = {
     "backend", "server-side", "database"
 }
 
-# extract_impact_metrics remains unchanged
-# extract_skills_regex remains unchanged
-# extract_all_skills remains unchanged
-# generate_summary remains unchanged
+def extract_impact_metrics(text: str) -> float:
+    text_lower = text.lower()
+    impact_score = 0.0
+    action_verbs = r'(?:increased|reduced|improved|grew|optimized|decreased|achieved|saved|scaled)'
+    metric_patterns = r'(?:\d+%)|(?:\$\d+[kmbKMB]?)|(?:\d+x)|(?:\d+\+?\s*(?:users|clients|requests|ms|seconds))'
+    complex_pattern = rf'{action_verbs}[\w\s]{{0,50}}?{metric_patterns}'
+    matches = re.findall(complex_pattern, text_lower)
+    impact_score += len(matches) * 5.0
+    return min(impact_score, 25.0)
+
+def extract_skills_regex(text: str) -> list[str]:
+    text_lower = text.lower()
+    found = []
+    for skill in SKILL_PATTERNS:
+        if re.search(r'\b' + re.escape(skill) + r'\b', text_lower):
+            found.append(skill.title() if len(skill) > 3 else skill.upper())
+    return found
+
+def extract_all_skills(text: str) -> list[str]:
+    all_skills = set(extract_skills_regex(text))
+    normalized = set()
+    for s in all_skills:
+        clean = s.strip().lower()
+        if len(clean) >= 2:
+            title_case_skill = clean.title() if len(clean) > 3 else clean.upper()
+            normalized.add(title_case_skill)
+            if clean in KNOWLEDGE_GRAPH:
+                for parent_skill in KNOWLEDGE_GRAPH[clean]:
+                    normalized.add(parent_skill.title())
+    return sorted(list(normalized))
+
+def generate_summary(text: str) -> Optional[str]:
+    clean_text = re.sub(r'\s+', ' ', text).strip()
+    return clean_text[:300] + "..." if len(clean_text) > 300 else clean_text
 
 def extract_name(text: str, filename: str = "") -> str:
     lines = [l.strip() for l in text.split('\n') if l.strip()]
@@ -118,8 +172,6 @@ def extract_name(text: str, filename: str = "") -> str:
             return f"{valid_parts[1].title()} {valid_parts[0].title()}"
         elif len(valid_parts) == 1:
             # Handle format like janesmith123 -> "Jane Smith" if possible, else just Jane.
-            # (Tricky without heavy NLP, defaulting to filename if parts break)
-            # Just titlesizing the one valid part for now
             return valid_parts[0].title()
 
     return "Unknown"
@@ -147,7 +199,7 @@ def extract_location(text: str, phone: str = "") -> str:
             if "usa" in extracted.lower() or "us" in extracted.lower(): return f"{extracted} (USA)"
             return extracted
 
-    # Phone Area Code Fallback (Confirmed USA mapping to ensure 973 maps to USA)
+    # Phone Area Code Fallback
     if phone:
         clean_phone = re.sub(r'[^\d+]', '', phone)
         if clean_phone.startswith("+1"): return "USA"
