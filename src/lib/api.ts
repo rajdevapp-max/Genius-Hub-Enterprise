@@ -10,7 +10,6 @@ const API_BASE = demoBackend
   : (import.meta.env.VITE_API_URL || 'https://vinu019-resume-backend.hf.space');
 
 async function apiFetch<T>(endpoint: string, options?: RequestInit): Promise<T> {
-// ... (leave the rest of the file exactly as it is)
   const res = await fetch(`${API_BASE}${endpoint}`, {
     headers: { 'Content-Type': 'application/json' },
     ...options,
@@ -36,7 +35,7 @@ export interface Suggestions {
 export interface ExpandedSearchRequest extends SearchRequest {
   page?: number;
   per_page?: number;
-  top_n?: number; // --- THE NEW TOP N FILTER ---
+  top_n?: number;
 }
 
 export interface ExpandedSearchResponse extends SearchResponse {
@@ -53,7 +52,8 @@ export const api = {
       body: JSON.stringify(data),
     }),
 
-  matchJD: (data: JDMatchRequest) =>
+  // 🎯 UPDATED: Now perfectly supports the new Location Filter for JD Match
+  matchJD: (data: JDMatchRequest & { location?: string }) =>
     apiFetch<JDMatchResponse>('/api/match-jd', {
       method: 'POST',
       body: JSON.stringify(data),
@@ -106,8 +106,9 @@ export const api = {
     return res.json();
   },
 
-  deleteCandidate: (id: number) =>
-    apiFetch<{ message: string }>(`/api/candidate/${id}`, { method: 'DELETE' }),
+  // 🎯 UPDATED: Renamed to deleteResume and points to the highly secure backend physical file deletion endpoint!
+  deleteResume: (id: number) =>
+    apiFetch<{ message: string }>(`/api/resumes/${id}`, { method: 'DELETE' }),
 
   exportCSV: (ids?: number[]) =>
     `${API_BASE}/api/export${ids?.length ? `?ids=${ids.join(',')}` : ''}`,

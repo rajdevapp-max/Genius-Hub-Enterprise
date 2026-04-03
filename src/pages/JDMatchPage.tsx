@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { FileText, Sparkles, Loader2, Target, CheckCircle2, XCircle, FileDown, Trophy, Shield, Zap, AlertTriangle } from 'lucide-react';
+import { FileText, Sparkles, Loader2, Target, CheckCircle2, XCircle, FileDown, Trophy, Shield, Zap, AlertTriangle, MapPin } from 'lucide-react';
 import CandidateCard from '@/components/CandidateCard';
 import CandidateModal from '@/components/CandidateModal';
 import GlowingCard from '@/components/GlowingCard';
@@ -11,6 +11,7 @@ const SAMPLE_JD = `We are looking for a Senior Full Stack Developer with 5+ year
 
 export default function JDMatchPage() {
   const [jd, setJd] = useState('');
+  const [location, setLocation] = useState(''); // 🎯 NEW: Location State
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<JDMatchResponse | null>(null);
   const [error, setError] = useState('');
@@ -32,13 +33,26 @@ export default function JDMatchPage() {
     });
   };
 
+  // 🎯 NEW: Secure Delete Function for JD Match
+  const handleDelete = async (id: number, name: string) => {
+    if (!window.confirm(`Are you sure you want to permanently delete ${name}'s resume?`)) return;
+    try {
+      await api.deleteResume(id);
+      setResult((prev: any) => prev ? { ...prev, candidates: prev.candidates.filter((c: any) => c.id !== id) } : null);
+      if (selectedCandidate?.id === id) setSelectedCandidate(null);
+    } catch (e) {
+      alert("Failed to delete candidate.");
+    }
+  };
+
   const handleMatch = async () => {
     if (!jd.trim()) return;
     setResult(null);
     setLoading(true);
     setError('');
     try {
-      const data = await api.matchJD({ job_description: jd, top_k: 30 });
+      // 🎯 NEW: Send Location to Backend
+      const data = await api.matchJD({ job_description: jd, top_k: 30, location: location.trim() });
       setResult(data);
     } catch (e: any) {
       setError(e.message || 'Match failed.');
@@ -54,7 +68,6 @@ export default function JDMatchPage() {
 
   return (
     <>
-      {/* 🌟 CINEMATIC BACKGROUND WATERMARK 🌟 */}
       <div className="fixed inset-0 pointer-events-none flex items-center justify-center z-[0] overflow-hidden">
         <motion.div
           animate={{ scale: [1, 1.05, 1], opacity: [0.12, 0.25, 0.12] }}
@@ -74,8 +87,6 @@ export default function JDMatchPage() {
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-8 pb-20 relative z-10">
         
         <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="text-center py-4">
-          
-          {/* 🎯 CHANGE 1: Top Center Logo with exact same motion */}
           <motion.div
             initial={{ scale: 0, rotate: -180 }}
             animate={{ scale: 1, rotate: 0 }}
@@ -84,12 +95,9 @@ export default function JDMatchPage() {
           >
             <img src="/comp-logo.PNG" alt="GeniusHub Logo" className="w-8 h-8 object-contain drop-shadow-lg relative z-10" />
           </motion.div>
-          
           <h1 className="text-3xl font-extrabold font-display mb-2 tracking-tight">
             <span className="gradient-text-accent">JD MATCH</span>
           </h1>
-          
-          {/* 🎯 CHANGE 2: Subtitle text replacement and highlight */}
           <p className="text-sm text-muted-foreground max-w-md mx-auto">
             Paste a job description — <span className="font-bold text-primary">GeniusHub</span> extracts requirements and strictly matches top candidates
           </p>
@@ -101,14 +109,24 @@ export default function JDMatchPage() {
               <textarea className="input-glass min-h-[300px] resize-none w-full" placeholder="Paste job description here..." value={jd} onChange={(e) => setJd(e.target.value)} />
               <div className="absolute bottom-3 right-3 text-[10px] font-mono text-muted-foreground">{jd.length} chars</div>
             </div>
-            <div className="flex gap-2">
-              
-              {/* 🎯 CHANGE 4: Button Icon replacement (kept exact sizing w-4 h-4) */}
+            
+            {/* 🎯 NEW: Location Input Box */}
+            <div className="relative">
+              <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <input 
+                type="text" 
+                className="input-glass w-full pl-11 !py-3 text-sm" 
+                placeholder="Target Location (e.g. Remote, India, New York) - Optional" 
+                value={location} 
+                onChange={(e) => setLocation(e.target.value)} 
+              />
+            </div>
+
+            <div className="flex gap-2 mt-2">
               <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
                 onClick={handleMatch} disabled={loading || !jd.trim()} className="btn-primary-glow flex-1">
                 {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <img src="/comp-logo.PNG" className="w-4 h-4 object-contain" alt="Match Logo" />} Analyze & Match
               </motion.button>
-              
               <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
                 onClick={() => setJd(SAMPLE_JD)} className="btn-ghost-glow">Sample JD</motion.button>
             </div>
@@ -153,21 +171,15 @@ export default function JDMatchPage() {
                             <span className={`w-6 h-6 rounded-lg flex items-center justify-center text-[10px] font-bold shrink-0 ${i === 0 ? 'rank-gold' : i === 1 ? 'rank-silver' : i === 2 ? 'rank-bronze' : 'bg-secondary text-muted-foreground'}`}>
                               {i + 1}
                             </span>
-                            
                             <span className={`text-xs w-28 truncate font-medium flex items-center gap-1 ${isFraud ? 'text-destructive' : 'text-foreground'}`}>
                               {c.name}
                               {isFraud && <AlertTriangle className="w-3 h-3 shrink-0" />}
                             </span>
-
                             <div className="flex-1 h-2 rounded-full bg-secondary overflow-hidden">
                               <motion.div initial={{ width: 0 }} animate={{ width: `${c.score}%` }}
                                 transition={{ delay: 0.3 + i * 0.08, duration: 0.8 }}
                                 className="h-full rounded-full"
-                                style={{ 
-                                  background: isFraud 
-                                    ? 'hsl(var(--destructive))' 
-                                    : `linear-gradient(90deg, hsl(var(--neon-blue)), hsl(var(${c.score > 75 ? '--success' : c.score > 50 ? '--warning' : '--destructive'})))` 
-                                }} 
+                                style={{ background: isFraud ? 'hsl(var(--destructive))' : `linear-gradient(90deg, hsl(var(--neon-blue)), hsl(var(${c.score > 75 ? '--success' : c.score > 50 ? '--warning' : '--destructive'})))` }} 
                               />
                             </div>
                             <span className={`text-xs font-bold font-display w-10 text-right ${isFraud ? 'text-destructive' : 'text-foreground'}`}>
@@ -187,8 +199,6 @@ export default function JDMatchPage() {
                     <FileText className="w-7 h-7 text-accent" />
                   </div>
                   <h3 className="text-base font-bold text-foreground mb-2">Intelligent JD Matching</h3>
-                  
-                  {/* 🎯 CHANGE 3: Empty State text replacement and highlight */}
                   <p className="text-sm text-muted-foreground max-w-sm leading-relaxed">
                     <span className="font-bold text-primary">GeniusHub</span> extracts skills, experience, and role details, then strictly filters out candidates lacking the requirements.
                   </p>
@@ -219,6 +229,7 @@ export default function JDMatchPage() {
                   bookmarked={bookmarks.has(c.id)}
                   onBookmark={() => toggleBookmark(c.id)}
                   onViewDetail={() => setSelectedCandidate(c)} 
+                  onDelete={handleDelete} // 🎯 NEW: DELETE HOOKED UP
                 />
               ))}
             </motion.div>
@@ -229,6 +240,7 @@ export default function JDMatchPage() {
       <CandidateModal
         candidate={selectedCandidate}
         onClose={() => setSelectedCandidate(null)}
+        onDelete={handleDelete} // 🎯 NEW: DELETE HOOKED UP
       />
     </>
   );

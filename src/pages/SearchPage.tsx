@@ -20,7 +20,6 @@ export default function SearchPage() {
   const [error, setError] = useState(''); 
   const [liveStatus, setLiveStatus] = useState<any>(null);
   
-  // --- DEFAULT OPEN NOW ---
   const [showFilters, setShowFilters] = useState(true);
   
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -69,6 +68,18 @@ export default function SearchPage() {
       next.has(id) ? next.delete(id) : next.add(id);
       return next;
     });
+  };
+
+  // 🎯 NEW: Secure Delete Function for Search Page
+  const handleDelete = async (id: number, name: string) => {
+    if (!window.confirm(`Are you sure you want to permanently delete ${name}'s resume?`)) return;
+    try {
+      await api.deleteResume(id);
+      setResult((prev: any) => prev ? { ...prev, candidates: prev.candidates.filter((c: any) => c.id !== id), total_matches: prev.total_matches - 1 } : null);
+      if (selectedCandidate?.id === id) setSelectedCandidate(null);
+    } catch (e) {
+      alert("Failed to delete candidate.");
+    }
   };
 
   const handleQueryChange = (value: string) => {
@@ -152,7 +163,6 @@ export default function SearchPage() {
 
   return (
     <>
-      {/* 🌟 NEW: CINEMATIC BACKGROUND WATERMARK 🌟 */}
       <div className="fixed inset-0 pointer-events-none flex items-center justify-center z-[0] overflow-hidden">
         <motion.div
           animate={{ scale: [1, 1.05, 1], opacity: [0.12, 0.25, 0.12] }}
@@ -169,7 +179,6 @@ export default function SearchPage() {
         </motion.div>
       </div>
 
-      {/* MAIN CONTENT CONTAINER (z-10 ensures it stays above the watermark) */}
       <motion.div variants={containerVariants} initial="hidden" animate="visible" className="relative z-10 space-y-8 pb-20">
         
         <motion.div variants={itemVariants} className="text-center py-6">
@@ -369,6 +378,7 @@ export default function SearchPage() {
                     blindMode={isBlindMode} 
                     onBookmark={() => toggleBookmark(c.id)}
                     onViewDetail={() => setSelectedCandidate(c)}
+                    onDelete={handleDelete} // 🎯 NEW: DELETE HOOKED UP
                   />
                 ))}
               </div>
@@ -412,6 +422,7 @@ export default function SearchPage() {
       <CandidateModal
         candidate={selectedCandidate}
         onClose={() => setSelectedCandidate(null)}
+        onDelete={handleDelete} // 🎯 NEW: DELETE HOOKED UP
       />
     </>
   );

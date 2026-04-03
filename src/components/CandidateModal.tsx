@@ -3,19 +3,19 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   X, Download, MapPin, Briefcase, GraduationCap, Award, Link as LinkIcon,
   FileText, User, Mail, Phone, ExternalLink, Shield, FileImage, Eye,
-  AlertTriangle, TrendingUp, Github, Linkedin, Code2, Terminal
+  AlertTriangle, TrendingUp, Github, Linkedin, Code2, Terminal, Trash2
 } from 'lucide-react';
 import ATSScoreRing from './ATSScoreRing';
 import { api } from '@/lib/api';
 
-export default function CandidateModal({ candidate, onClose }) {
+export default function CandidateModal({ candidate, onClose, onDelete }: any) {
   const [tab, setTab] = useState('profile');
   const [previewText, setPreviewText] = useState('');
   const [loadingPreview, setLoadingPreview] = useState(false);
 
   // --- NEW ESCAPE KEY LISTENER ---
   useEffect(() => {
-    const handleKeyDown = (e) => {
+    const handleKeyDown = (e: any) => {
       if (e.key === 'Escape' && candidate) {
         onClose();
       }
@@ -49,7 +49,7 @@ export default function CandidateModal({ candidate, onClose }) {
   const relExp = candidate.relevant_experience_years ?? rawExp;
   const gaps = candidate.total_gap_years || 0;
 
-  const getLinkIcon = (url) => {
+  const getLinkIcon = (url: string) => {
     if (url.includes('linkedin.com')) return <Linkedin className="w-4 h-4" />;
     if (url.includes('github.com')) return <Github className="w-4 h-4" />;
     if (url.includes('leetcode.com')) return <Code2 className="w-4 h-4 text-warning" />;
@@ -86,6 +86,12 @@ export default function CandidateModal({ candidate, onClose }) {
                 </div>
               </div>
               <div className="flex items-center gap-2">
+                {/* 🎯 NEW: SECURE DELETE BUTTON IN MODAL */}
+                {onDelete && (
+                  <button onClick={() => onDelete(candidate.id, candidate.name)} className="btn-ghost-glow !px-4 !py-2 !text-xs !text-destructive hover:!bg-destructive/10 !border-destructive/30">
+                    <Trash2 className="w-3.5 h-3.5" /> Delete
+                  </button>
+                )}
                 <a href={api.downloadResume(candidate.filename)} target="_blank" rel="noopener noreferrer"
                   className="btn-primary-glow !px-4 !py-2 !text-xs">
                   <Download className="w-3.5 h-3.5" /> Download
@@ -240,7 +246,7 @@ export default function CandidateModal({ candidate, onClose }) {
                         <div>
                           <p className="text-[10px] text-muted-foreground mb-1 uppercase tracking-wider">Mandatory Matches</p>
                           <div className="flex flex-wrap gap-1.5">
-                            {candidate.matched_mandatory?.map(s => <span key={`m-${s}`} className="skill-tag border border-warning text-warning bg-warning/10">{s}</span>)}
+                            {candidate.matched_mandatory?.map((s: any) => <span key={`m-${s}`} className="skill-tag border border-warning text-warning bg-warning/10">{s}</span>)}
                           </div>
                         </div>
                       )}
@@ -249,7 +255,7 @@ export default function CandidateModal({ candidate, onClose }) {
                         <div>
                           <p className="text-[10px] text-muted-foreground mb-1 uppercase tracking-wider">Secondary/Semantic Matches</p>
                           <div className="flex flex-wrap gap-1.5">
-                            {(candidate.matched_secondary || candidate.matched_skills || []).map(s => <span key={`s-${s}`} className="skill-tag-matched">{s}</span>)}
+                            {(candidate.matched_secondary || candidate.matched_skills || []).map((s: any) => <span key={`s-${s}`} className="skill-tag-matched">{s}</span>)}
                           </div>
                         </div>
                       )}
@@ -258,7 +264,7 @@ export default function CandidateModal({ candidate, onClose }) {
                         <div>
                           <p className="text-[10px] text-muted-foreground mb-1 uppercase tracking-wider">Missing Requirements</p>
                           <div className="flex flex-wrap gap-1.5">
-                            {(candidate.missing_mandatory || candidate.missing_skills || []).map(s => <span key={`x-${s}`} className="skill-tag-missing">{s}</span>)}
+                            {(candidate.missing_mandatory || candidate.missing_skills || []).map((s: any) => <span key={`x-${s}`} className="skill-tag-missing">{s}</span>)}
                           </div>
                         </div>
                       )}
@@ -267,12 +273,12 @@ export default function CandidateModal({ candidate, onClose }) {
                         <p className="text-[10px] text-muted-foreground mb-1 uppercase tracking-wider">Other Extracted Skills & Ontology</p>
                         <div className="flex flex-wrap gap-1.5">
                           {(candidate.skills || [])
-                            .filter(s => 
+                            .filter((s: any) => 
                               !(candidate.matched_mandatory || []).includes(s) && 
                               !(candidate.matched_secondary || candidate.matched_skills || []).includes(s) && 
                               !(candidate.missing_mandatory || candidate.missing_skills || []).includes(s)
                             )
-                            .map(s => <span key={`o-${s}`} className="skill-tag">{s}</span>)}
+                            .map((s: any) => <span key={`o-${s}`} className="skill-tag">{s}</span>)}
                         </div>
                       </div>
                     </div>
@@ -285,7 +291,7 @@ export default function CandidateModal({ candidate, onClose }) {
                           <Award className="w-4 h-4 text-warning" /> CERTIFICATES ({certs.length})
                         </h3>
                         <div className="space-y-2">
-                          {certs.map((c, i) => (
+                          {certs.map((c: any, i: number) => (
                             <motion.div key={c} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.04 }}
                               className="p-2.5 rounded-xl bg-secondary/20 flex items-center gap-2 text-sm">
                               <span className="text-warning">🏆</span> {c}
@@ -301,7 +307,7 @@ export default function CandidateModal({ candidate, onClose }) {
                           <LinkIcon className="w-4 h-4 text-info" /> PROFILES & LINKS ({links.length})
                         </h3>
                         <div className="space-y-2">
-                          {links.map(l => (
+                          {links.map((l: any) => (
                             <a key={l} href={l} target="_blank" rel="noopener noreferrer"
                               className="flex items-center gap-2 text-sm text-primary p-2.5 rounded-xl bg-secondary/20 hover:bg-primary/10 transition-colors truncate">
                               {getLinkIcon(l)}
