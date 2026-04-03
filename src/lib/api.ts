@@ -1,27 +1,22 @@
-// api.ts — Unified API Client Layer v30.0
-// Features: Infinite Demo Routing, Vercel multi-project routing, and correct endpoint definitions.
-
 import type { SearchRequest, SearchResponse, JDMatchRequest, JDMatchResponse, StatsResponse, UploadResponse, LiveStatus, Candidate } from './types';
 
-// --- THE INFINITE DEMO ROUTER ---
-const VERCEL_PROJECT_URL = import.meta.env.VITE_VERCEL_URL;
-let API_URL: string;
+// --- STRICT ROUTING LOGIC ---
+const params = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : new URLSearchParams();
+const demoBackend = params.get('demo');
 
-if (VERCEL_PROJECT_URL && VERCEL_PROJECT_URL.includes('vercel.app')) {
-  const parts = VERCEL_PROJECT_URL.split('.vercel.app')[0].split('-');
-  const companyName = parts[parts.length - 1];
-  API_URL = `https://vinu019-${companyName}.hf.space`;
-} else {
-  const params = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : new URLSearchParams();
-  const demoBackend = params.get('demo'); 
-  API_URL = demoBackend 
-    ? `https://vinu019-${demoBackend}.hf.space` 
-    : (import.meta.env.VITE_API_URL || 'https://vinu019-resume-backend.hf.space');
-}
+// Hugging Face URLs require lowercase subdomains
+const safeDemoName = demoBackend ? demoBackend.toLowerCase() : null;
+
+// If '?demo=' exists, use the Demo space. Otherwise, force the Original 37K space!
+const API_URL = safeDemoName 
+  ? `https://vinu019-${safeDemoName}.hf.space` 
+  : (import.meta.env.VITE_API_URL || 'https://vinu019-resume-backend.hf.space');
 
 const apiFetch = async <T>(endpoint: string, options?: RequestInit): Promise<T> => {
   const res = await fetch(`${API_URL}${endpoint}`, {
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+    },
     ...options,
   });
   if (!res.ok) throw new Error(`API Error: ${res.status} ${res.statusText}`);
