@@ -1,6 +1,6 @@
 """
-main.py — Vercel-Compatible Backend API v32.0
-Features: Multi-threading extractor, FAISS vector search, strict location hard-block.
+main.py — Vercel-Compatible Backend API v33.0
+Features: Multi-threading extractor, FAISS vector search, STRICT Location Isolation.
 """
 import os
 import zipfile
@@ -60,7 +60,7 @@ from dedup import find_duplicates, remove_duplicates, scan_folder_duplicates
 init_db()
 start_watcher_thread()
 
-app = FastAPI(title="Resume AI Intelligence Platform", version="32.0")
+app = FastAPI(title="Resume AI Intelligence Platform", version="33.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -73,7 +73,7 @@ os.makedirs(RESUME_DIR, exist_ok=True)
 
 GEO_MAPPING = {
     "india": ["india", "maharashtra", "mumbai", "delhi", "bangalore", "bengaluru", "karnataka", "hyderabad", "telangana", "chennai", "tamil nadu", "pune", "gurgaon", "gurugram", "noida", "up", "uttar pradesh", "gujarat", "ahmedabad", "kolkata", "rohtak", "haryana", "punjab", "chandigarh", "rajasthan", "kerala", "kochi", "trivandrum"],
-    "usa": ["usa", "us", "united states", "america", "ny", "new york", "ca", "california", "sf", "san francisco", "texas", "tx", "austin", "dallas", "houston", "washington", "wa", "florida", "fl", "miami", "chicago", "il", "illinois", "boston", "ma", "colorado", "atlanta", "nc", "nj", "va", "oh", "ga", "mi", "az", "md", "co", "mn", "in", "wi", "tn", "mo", "ct", "ut", "sc", "nv", "or", "al", "ak", "ar", "de", "hi", "id", "ia", "ks", "ky", "la", "me", "ms", "mt", "ne", "nh", "nm", "nd", "ok", "pa", "ri", "sd", "vt", "wv", "wy"],
+    "usa": ["usa", "us", "united states", "america", "ny", "new york", "ca", "california", "sf", "san francisco", "texas", "tx", "austin", "dallas", "houston", "washington", "wa", "florida", "fl", "miami", "chicago", "il", "illinois", "boston", "ma", "colorado", "atlanta", "nc", "nj", "va", "oh", "ga", "mi", "az", "md", "co", "mn", "wi", "tn", "mo", "ct", "ut", "sc", "nv", "al", "ak", "ar", "de", "hi", "id", "ia", "ks", "ky", "la", "ms", "mt", "ne", "nh", "nm", "nd", "ok", "pa", "ri", "sd", "vt", "wv", "wy"],
     "uk": ["uk", "united kingdom", "london", "manchester", "birmingham", "edinburgh", "scotland", "england", "wales", "ireland", "dublin"],
     "canada": ["canada", "toronto", "ontario", "vancouver", "bc", "british columbia", "montreal", "quebec", "calgary", "alberta", "ottawa"],
     "australia": ["australia", "sydney", "nsw", "melbourne", "victoria", "brisbane", "queensland", "perth", "adelaide"],
@@ -101,18 +101,21 @@ class JDMatchRequest(BaseModel):
     top_k: int = 100
     location: str = ""
 
-def match_location(req_loc: str, resume_loc: str, raw_text: str = "") -> bool:
+# 🎯 THE FIX: Completely removed `raw_text` from location matching. 
+# It will now ONLY match if the candidate's exact extracted location tag matches your search.
+def match_location(req_loc: str, resume_loc: str) -> bool:
     if not req_loc: return True
+    if not resume_loc: return False # If strict location is required, reject candidates with no location
+    
     req_loc = req_loc.lower().strip()
-    res_loc = (resume_loc or "").lower()
-    r_text = (raw_text or "").lower()
+    res_loc = resume_loc.lower()
     
     search_terms = GEO_MAPPING.get(req_loc, [req_loc])
     if req_loc not in search_terms: search_terms.append(req_loc)
     
     for term in search_terms:
         pattern = r'\b' + re.escape(term) + r'\b'
-        if re.search(pattern, res_loc) or re.search(pattern, r_text): 
+        if re.search(pattern, res_loc): 
             return True
     return False
 
@@ -270,7 +273,6 @@ def search_resumes(req: SearchRequest):
     try:
         original_query = req.query or ""
         detected_location = req.mandatory_location
-        # Location Auto-Detection from Query
         if not detected_location:
             clean_q_lower = original_query.lower()
             for loc_key in GEO_MAPPING.keys():
@@ -318,11 +320,10 @@ def search_resumes(req: SearchRequest):
             resume = db.query(Resume).get(rid)
             if not resume: continue
 
+            # 🎯 AI SEARCH: Only allows strict matches to the extracted Location string! No more raw_text false positives.
+            if detected_location and not match_location(detected_location, resume.location): continue
+
             raw_text = (resume.raw_text or "").lower()
-
-            # 🎯 AI Search strict location enforcement
-            if detected_location and not match_location(detected_location, resume.location, raw_text): continue
-
             skills_text_lower = (resume.skills or "").lower()
             links_str = "".join(json.loads(resume.hyperlinks) if resume.hyperlinks else []).lower()
             certs_str = "".join(json.loads(resume.certificates) if resume.certificates else []).lower()
@@ -388,8 +389,8 @@ def match_jd(req: JDMatchRequest):
             resume = db.query(Resume).get(rid)
             if not resume: continue 
 
-            # 🎯 THE FIX (HARD BLOCK): JD Match strict location enforcement
-            if req.location and not match_location(req.location, resume.location, resume.raw_text): 
+            # 🎯 JD MATCH: Exact same strict filtering. Raw_text is totally removed from the equation.
+            if req.location and not match_location(req.location, resume.location): 
                 continue
 
             existing_ids.add(rid)
@@ -416,8 +417,7 @@ def match_jd(req: JDMatchRequest):
                 fallback = db.query(Resume).filter(or_(*conditions)).limit(req.top_k).all()
                 for r in fallback:
                     if r.id not in existing_ids:
-                        # 🎯 THE FIX (HARD BLOCK) applied to fallback results
-                        if req.location and not match_location(req.location, r.location, r.raw_text): continue
+                        if req.location and not match_location(req.location, r.location): continue
                         existing_ids.add(r.id)
                         d = _resume_to_dict(
                             r, 

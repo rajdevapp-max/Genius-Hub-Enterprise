@@ -1,6 +1,6 @@
 """
-classifier.py — Multi-AI NER & Skill Extraction v24.0
-Features: Reverted Deep-Scan Location Engine, Surnam.Firstname Email Parser, Nuclear Skill-Based Name Rejection.
+classifier.py — Multi-AI NER & Skill Extraction v25.0
+Features: Strict Location Matching, Dynamic Email Name Extraction, Nuclear Javascript Exclusions.
 """
 import os
 import re
@@ -21,6 +21,7 @@ STATE_MAPPING = {
     "va": "Virginia", "wa": "Washington", "wv": "West Virginia", "wi": "Wisconsin", "wy": "Wyoming"
 }
 
+# 🎯 THE FIX: Adding underscore, js, etc. to skills so they get rejected as names
 SKILL_PATTERNS = [
     "python", "java", "javascript", "typescript", "c++", "c#", "go", "rust",
     "kotlin", "swift", "ruby", "php", "scala", "perl", "r programming",
@@ -53,7 +54,7 @@ SKILL_PATTERNS = [
     "solidity", "web3", "blockchain", "ethereum",
     "react native", "flutter", "ios", "android", "swiftui",
     "excel", "matlab", "unity", "three.js",
-    "stripe", "twilio", "auth0", "nginx", "apache", "c", "node"
+    "stripe", "twilio", "auth0", "nginx", "apache", "c", "node", "underscore", "js"
 ]
 
 KNOWLEDGE_GRAPH = {
@@ -128,8 +129,8 @@ def generate_summary(text: str) -> Optional[str]:
 def extract_name(text: str, filename: str = "") -> str:
     lines = [l.strip() for l in text.split('\n') if l.strip()]
     
-    # 🎯 THE FIX: Expanded "Nuclear" tech list to reject names like "Node Libraries"
-    exclusions = {"management", "wealth", "project", "server", "application", "system", "database", "developer", "engineer", "analyst", "administrator", "technologies", "solutions", "summary", "experience", "resume", "curriculum", "vitae", "cv", "profile", "page", "senior", "junior", "lead", "consultant", "manager", "professional", "skills", "aws", "gcp", "azure", "cloud", "data", "science", "architect", "oracle", "postgresql", "sql", "mysql", "react", "angular", "vue", "java", "python", "software", "development", "and", "libraries", "node", "modules", "frameworks", "api", "platforms"}
+    # 🎯 THE FIX: Expanded "Nuclear" tech list to permanently banish "Underscore JS"
+    exclusions = {"management", "wealth", "project", "server", "application", "system", "database", "developer", "engineer", "analyst", "administrator", "technologies", "solutions", "summary", "experience", "resume", "curriculum", "vitae", "cv", "profile", "page", "senior", "junior", "lead", "consultant", "manager", "professional", "skills", "aws", "gcp", "azure", "cloud", "data", "science", "architect", "oracle", "postgresql", "sql", "mysql", "react", "angular", "vue", "java", "python", "software", "development", "and", "libraries", "node", "modules", "frameworks", "api", "platforms", "underscore", "js", "frontend", "backend", "web", "app", "network", "agile", "scrum"}
 
     for line in lines[:15]:
         chunks = re.split(r'[|,\t\-\–]', line)
@@ -141,7 +142,7 @@ def extract_name(text: str, filename: str = "") -> str:
 
             words = chunk.split()
             if 1 < len(words) <= 5:
-                # 🎯 THE FIX: Extreme Name Rejection. If any word is in the skill list or exclusions, reject!
+                # Extreme Name Rejection
                 if any(w.lower() in exclusions for w in words) or any(w.lower() in SKILL_PATTERNS for w in words): 
                     continue
                 
@@ -151,28 +152,24 @@ def extract_name(text: str, filename: str = "") -> str:
                     if clean_chunk and len(clean_chunk.split()) > 1:
                         return clean_chunk.title()
 
-    # Fallback to Filename (Existing)
+    # 🎯 THE FIX: The AI Email Parser (vinay.kumar123@... -> Vinay Kumar)
+    email_match = re.search(r'([a-zA-Z0-9._-]+)@[a-zA-Z0-9._-]+\.[a-zA-Z0-9_-]+', text)
+    if email_match:
+        prefix = email_match.group(1).lower()
+        parts = re.split(r'[._-]', prefix)
+        # Strip numbers and symbols from the name parts
+        clean_parts = [re.sub(r'[^a-zA-Z]', '', p).strip() for p in parts]
+        valid_parts = [p for p in clean_parts if len(p) > 1 and p not in exclusions and p not in SKILL_PATTERNS]
+        
+        if len(valid_parts) >= 2:
+            return f"{valid_parts[0].title()} {valid_parts[1].title()}"
+        elif len(valid_parts) == 1:
+            return valid_parts[0].title()
+
     if filename:
         clean_fn = re.sub(r'[\d_+\-\.]', ' ', filename).replace('pdf', '').replace('docx', '').replace('doc', '')
         words = [w for w in clean_fn.split() if len(w) > 2 and w.lower() not in exclusions and w.lower() not in SKILL_PATTERNS]
         if words: return " ".join(words[:2]).title()
-
-    # 🎯 THE FIX: Advanced Surname.Firstname Email Parser Fallback
-    email_match = re.search(r'([a-zA-Z0-9._-]+)@[a-zA-Z0-9._-]+\.[a-zA-Z0-9_-]+', text)
-    if email_match:
-        prefix = email_match.group(1).lower()
-        # Handle formats like smith.jane or smith_jane
-        parts = re.split(r'[._-]', prefix)
-        clean_parts = [re.sub(r'[^a-zA-Z]', '', p).strip() for p in parts]
-        # Skip parts that became empty or are tech junk
-        valid_parts = [p for p in clean_parts if len(p) > 1 and p not in exclusions and p not in SKILL_PATTERNS]
-        
-        if len(valid_parts) >= 2:
-            # Surnam.Firstname Fallback
-            return f"{valid_parts[1].title()} {valid_parts[0].title()}"
-        elif len(valid_parts) == 1:
-            # Handle format like janesmith123 -> "Jane Smith" if possible, else just Jane.
-            return valid_parts[0].title()
 
     return "Unknown"
 
@@ -192,14 +189,12 @@ def extract_location(text: str, phone: str = "") -> str:
     global_match = re.search(global_pat, text[:1500], re.IGNORECASE)
     if global_match:
         extracted = global_match.group(1).strip().split('\n')[0][:50]
-        # Strict blocker list to prevent tech junk from becoming locations
         blockers = {"pipeline", "server", "architecture", "data", "engineering", "platform"}
         if extracted and not any(b in extracted.lower() for b in blockers):
             if "india" in extracted.lower() or "ind" in extracted.lower(): return f"{extracted} (India)"
             if "usa" in extracted.lower() or "us" in extracted.lower(): return f"{extracted} (USA)"
             return extracted
 
-    # Phone Area Code Fallback
     if phone:
         clean_phone = re.sub(r'[^\d+]', '', phone)
         if clean_phone.startswith("+1"): return "USA"
@@ -212,7 +207,6 @@ def extract_location(text: str, phone: str = "") -> str:
             if area_code in us_high_area_codes or area_code[0] in "2345": return "USA"
             if area_code[0] in "6789": return "India"
 
-    # Strict City/State (Existing)
     city_state_match_top = re.search(r'([a-z\s]{3,20}),\s*(al|ak|az|ar|ca|co|ct|de|fl|ga|hi|id|il|in|ia|ks|ky|la|me|md|ma|mi|mn|ms|mo|mt|ne|nv|nh|nj|nm|ny|nc|nd|oh|ok|or|pa|ri|sc|sd|tn|tx|ut|vt|va|wa|wv|wi|wy)\b', search_lower[:1500])
     if city_state_match_top:
         city = city_state_match_top.group(1).strip().split('\n')[-1].title()
@@ -221,14 +215,12 @@ def extract_location(text: str, phone: str = "") -> str:
             state_code = city_state_match_top.group(2).lower()
             return f"{city}, {STATE_MAPPING.get(state_code, state_code.upper())} (USA)"
 
-    # ZIP Code Fallback (Existing)
     zip_match = re.search(r'\b([A-Z]{2})\s*(\d{5})\b', search_block[:1500])
     if zip_match:
         state_code = zip_match.group(1).lower()
         if state_code in STATE_MAPPING:
             return f"{STATE_MAPPING[state_code]} (USA)"
 
-    # Deep Country/City Search
     us_states_full = r'\b(alabama|alaska|arizona|arkansas|california|colorado|connecticut|delaware|florida|georgia|hawaii|idaho|illinois|indiana|iowa|kansas|kentucky|louisiana|maine|maryland|massachusetts|michigan|minnesota|mississippi|missouri|montana|nebraska|nevada|new hampshire|new jersey|new mexico|new york|north carolina|north dakota|ohio|oklahoma|oregon|pennsylvania|rhode island|south carolina|south dakota|tennessee|texas|utah|vermont|virginia|washington|west virginia|wisconsin|wyoming)\b'
     us_cities = r'\b(los angeles|chicago|houston|phoenix|philadelphia|san antonio|san diego|dallas|san jose|austin|jacksonville|fort worth|columbus|san francisco|charlotte|indianapolis|seattle|denver|boston|el paso|nashville|detroit|oklahoma city|portland|las vegas|memphis|louisville|baltimore|milwaukee|albuquerque|tucson|fresno|sacramento|kansas city|mesa|atlanta|omaha|colorado springs|raleigh|miami|oakland|minneapolis|tulsa|bakersfield|wichita|arlington|ny|la|sf|west chester)\b'
     india_cities = r'\b(mumbai|delhi|bangalore|bengaluru|hyderabad|chennai|pune|gurgaon|gurugram|noida|kolkata|ahmedabad|kerala|maharashtra|karnataka|tamil nadu)\b'
