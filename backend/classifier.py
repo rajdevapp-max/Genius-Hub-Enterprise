@@ -1,6 +1,6 @@
 """
-classifier.py — Multi-AI NER & Skill Extraction v20.1
-Features: Strict Location Hierarchy, Bulletproof Mathematical Job Gap Calculator.
+classifier.py — Multi-AI NER & Skill Extraction v20.2
+Features: Strict Location Hierarchy, Mathematical Job Gap Calculator, and Aggressive Table-Name Extractor.
 """
 import os
 import re
@@ -125,17 +125,47 @@ def generate_summary(text: str) -> Optional[str]:
     clean_text = re.sub(r'\s+', ' ', text).strip()
     return clean_text[:300] + "..." if len(clean_text) > 300 else clean_text
 
+# --- 🎯 THE FIX: AGGRESSIVE TABLE-NAME EXTRACTOR ---
 def extract_name(text: str) -> str:
     lines = [l.strip() for l in text.split('\n') if l.strip()]
-    for line in lines[:10]:
-        if '@' in line or re.search(r'\d{5,}', line) or 'linkedin' in line.lower() or 'github' in line.lower(): 
-            continue
-        words = line.split()
-        if 1 < len(words) <= 4:
-            cap_count = sum(1 for w in words if w and w[0].isupper() and w.isalpha())
-            if cap_count >= len(words) - 1:
-                clean_line = re.sub(r'(?i)(resume|curriculum vitae|cv|profile)', '', line).strip()
-                if clean_line: return clean_line
+    
+    # Scan the top 20 lines
+    for line in lines[:20]:
+        # Split aggressively by commas and pipes (handles table rows like "Rutul Shah, Senior...")
+        chunks = re.split(r'[|,\t\-\–]', line)
+        
+        for chunk in chunks:
+            chunk = chunk.strip()
+            if not chunk: continue
+            
+            # Skip chunks with emails, long numbers, or links
+            if '@' in chunk or re.search(r'\d{4,}', chunk) or 'linkedin' in chunk.lower() or 'github' in chunk.lower(): 
+                continue
+            
+            # Remove common resume titles so they don't corrupt the name
+            clean_chunk = re.sub(r'(?i)(resume|curriculum vitae|cv|profile|page \d|senior|junior|lead|consultant|developer|engineer|manager)', '', chunk).strip()
+            
+            # Reject standard section headers
+            if clean_chunk.lower() in ['summary', 'experience', 'education', 'skills', 'technical skills', 'professional experience']:
+                continue
+
+            words = clean_chunk.split()
+            # If it looks like a First and Last name
+            if 1 < len(words) <= 4:
+                cap_count = sum(1 for w in words if w and w[0].isupper() and w.isalpha())
+                # Must be mostly capitalized words
+                if cap_count >= len(words) - 1 and cap_count > 0:
+                    return clean_chunk
+
+    # --- AGGRESSIVE FALLBACK: Extract name from Email ---
+    email_match = re.search(r'([a-zA-Z0-9._-]+)@[a-zA-Z0-9._-]+\.[a-zA-Z0-9_-]+', text)
+    if email_match:
+        email_prefix = email_match.group(1).lower()
+        # Clean out numbers and dots (e.g., shahrutulr -> shah rutulr)
+        clean_prefix = re.sub(r'[0-9._-]', ' ', email_prefix).strip()
+        if clean_prefix and len(clean_prefix.split()) > 1:
+            return clean_prefix.title()
+
     return "Unknown"
 
 def extract_email(text: str) -> str:
@@ -208,7 +238,6 @@ def extract_education(text: str) -> str:
         if keyword.lower() in text.lower(): return label
     return ""
 
-# --- THE FIX: Bulletproof Regex to prevent thread freezing ---
 def analyze_experience(text: str) -> dict:
     fallback_exp = 0.0
     patterns = [r'(\d+)\+?\s*(?:years?|yrs?)\s*(?:of\s*)?(?:experience|exp)', r'(?:experience|exp)[:\s]*(\d+)\+?\s*(?:years?|yrs?)', r'(\d+)\+?\s*(?:years?|yrs?)\s*(?:in|of)', r'(?:total|overall)\s*(?:experience|exp)[:\s]*(\d+)']
@@ -220,7 +249,6 @@ def analyze_experience(text: str) -> dict:
 
     current_year = datetime.datetime.now().year
     
-    # Safe Regex that won't backtrack and freeze your threads
     date_ranges = re.findall(r'\b((?:19|20)\d{2})\s*(?:[-–]|to)\s*((?:19|20)\d{2}|present|current|now)\b', text, re.IGNORECASE)
     
     if not date_ranges:

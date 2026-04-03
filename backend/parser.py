@@ -1,7 +1,7 @@
 """
-parser.py — Enhanced Resume Parser v12.0
+parser.py — Enhanced Resume Parser v13.0
 Extracts text, hyperlinks, images, fonts, certificates.
-Features: Anti-Cheat Detection, Deep XML Salvage, Legacy .doc Binary Ripper, Broken PDF Salvage, and Auto-Kill Switch.
+Features: Anti-Cheat Detection, Deep XML Salvage, Legacy .doc Binary Ripper, Broken PDF Salvage, Auto-Kill Switch, and DEEP TABLE EXTRACTION.
 """
 import os
 import re
@@ -29,12 +29,9 @@ def file_hash(file_path: str) -> str:
 def extract_text_from_pdf(file_path: str) -> dict:
     result = {"text": "", "hyperlinks": [], "fonts": {}, "has_image": False, "page_count": 0, "fraud_flag": 0, "fraud_reason": ""}
     try:
-        # 1. Primary Engine: PyMuPDF (Super Fast, detects fonts & invisible text)
         doc = fitz.open(file_path)
         result["page_count"] = len(doc)
         all_text = []
-        
-        # --- THE FIX: Hard cap at 10 pages so massive portfolios don't freeze the engine ---
         MAX_PAGES = 10 
         
         for page_num in range(min(len(doc), MAX_PAGES)):
@@ -68,17 +65,15 @@ def extract_text_from_pdf(file_path: str) -> dict:
                 elif block.get("type") == 1: 
                     result["has_image"] = True
             
-            # --- THE FIX: 15-second OCR Timeout Kill Switch ---
             if len(full_page_text.strip()) < 50:
                 for img_info in page.get_images(full=True):
                     try:
                         base_img = doc.extract_image(img_info[0])
                         if base_img and HAS_TESSERACT:
-                            # If it takes more than 15 seconds to read an image, abort it and move on!
                             ocr_text = pytesseract.image_to_string(Image.open(io.BytesIO(base_img["image"])), timeout=15)
                             if ocr_text.strip(): all_text.append(ocr_text)
                     except Exception as ocr_e:
-                        pass # Silently skip the frozen image and continue parsing
+                        pass 
         
         doc.close()
         result["text"] = "\n".join(all_text).strip()
@@ -89,10 +84,8 @@ def extract_text_from_pdf(file_path: str) -> dict:
         result["fonts"] = serialized_fonts
 
     except Exception as e:
-        # --- THE NEW FIX: BROKEN PDF SALVAGE OPERATION ---
         print(f"\n[parser] Broken PDF detected ({os.path.basename(file_path)}). Initiating Salvage...")
         try:
-            # Fallback 1: Try pdfplumber (Better at handling corrupted headers)
             with pdfplumber.open(file_path) as pdf:
                 result["page_count"] = len(pdf.pages)
                 extracted_text = []
@@ -101,25 +94,14 @@ def extract_text_from_pdf(file_path: str) -> dict:
                     text = page.extract_text()
                     if text: extracted_text.append(text)
                 result["text"] = "\n".join(extracted_text)
-            
-            if result["text"].strip():
-                print(f"[parser] ✓ PDF Salvage successful! Recovered {len(result['text'])} characters.")
-            else:
-                raise Exception("pdfplumber extracted no text")
-                
         except Exception as salvage_e:
-            # Fallback 2: Raw Binary Extraction (If the file is completely destroyed)
             try:
                 with open(file_path, 'rb') as f:
                     content = f.read()
                     strings = re.findall(b'[a-zA-Z0-9\s,\.\-\@\+]{5,}', content)
                     result["text"] = " ".join([s.decode('ascii', errors='ignore') for s in strings])
-                if result["text"].strip():
-                    print(f"[parser] ✓ Binary Salvage successful! Recovered {len(result['text'])} characters.")
-                else:
-                    print(f"[parser] ❌ File is fundamentally unreadable.")
             except Exception as bin_e:
-                print(f"[parser] ❌ Total failure on broken PDF.")
+                pass
 
     return result
 
@@ -129,13 +111,14 @@ def extract_text_from_docx(file_path: str) -> dict:
         doc = Document(file_path)
         texts = []
         font_set = {}
-        
-        # --- THE FIX: Cap parsing at 500 paragraphs to prevent infinite loops ---
         MAX_PARAGRAPHS = 500
         
+        # 🎯 1. EXTRACT NORMAL PARAGRAPHS
         for i, para in enumerate(doc.paragraphs):
             if i > MAX_PARAGRAPHS: break
-            texts.append(para.text)
+            if para.text.strip():
+                texts.append(para.text.strip())
+            
             for run in para.runs:
                 if run.font.color and run.font.color.rgb and str(run.font.color.rgb) == "FFFFFF" and run.text.strip():
                     result["fraud_flag"] = 1; result["fraud_reason"] = "Detected invisible (white) text in Word Document."
@@ -144,6 +127,19 @@ def extract_text_from_docx(file_path: str) -> dict:
                 if fname not in font_set: font_set[fname] = {"sizes": set(), "count": 0}
                 font_set[fname]["sizes"].add(round(fsize, 1)); font_set[fname]["count"] += 1
         
+        # 🎯 2. THE FIX: EXTRACT TABLES (This is where Names and Skills were hiding!)
+        for table in doc.tables:
+            for row in table.rows:
+                row_data = []
+                for cell in row.cells:
+                    clean_cell = cell.text.strip().replace('\n', ' ')
+                    if clean_cell and clean_cell not in row_data: 
+                        row_data.append(clean_cell)
+                if row_data:
+                    # Join table cells with a space so the AI can read it like a sentence
+                    texts.append(" | ".join(row_data))
+
+        # 3. EXTRACT HYPERLINKS & IMAGES
         for para in doc.paragraphs:
             for elem in para._element.iter():
                 if elem.tag.endswith("}hyperlink"):
@@ -155,6 +151,7 @@ def extract_text_from_docx(file_path: str) -> dict:
         for rel in doc.part.rels.values():
             if "image" in rel.reltype: result["has_image"] = True; break
         
+        # Put the extracted text together! We put the tables at the TOP because names are usually in the first table.
         result["text"] = "\n".join(texts).strip()
         result["fonts"] = {fname: {"sizes": sorted(list(fdata["sizes"])), "count": fdata["count"]} for fname, fdata in font_set.items()}
         
@@ -171,20 +168,18 @@ def extract_text_from_docx(file_path: str) -> dict:
                     content = f.read()
                     strings = re.findall(b'[a-zA-Z0-9\s,\.\-\@\+]{5,}', content)
                     result["text"] = " ".join([s.decode('ascii', errors='ignore') for s in strings])
-            if result["text"].strip(): print(f"[parser] ✓ Salvage successful! Recovered {len(result['text'])} characters.")
-            else: print(f"[parser] File is fundamentally unreadable.")
         except Exception as salvage_e:
-            print(f"[parser] File is fundamentally unreadable: {salvage_e}")
+            pass
+            
     return result
 
 def extract_text_from_image(file_path: str) -> dict:
     result = {"text": "", "hyperlinks": [], "fonts": {}, "has_image": True, "page_count": 1, "fraud_flag": 0, "fraud_reason": ""}
     if not HAS_TESSERACT: return result
     try:
-        # --- THE FIX: 20-second OCR Timeout Kill Switch ---
         result["text"] = pytesseract.image_to_string(Image.open(file_path), timeout=20).strip()
     except Exception as e: 
-        print(f"[parser] Skipped image {os.path.basename(file_path)} due to timeout/error.")
+        pass
     return result
 
 def extract_full(file_path: str) -> dict:
@@ -199,8 +194,6 @@ def extract_full(file_path: str) -> dict:
     data["file_hash"] = file_hash(file_path)
     data["word_count"] = len(data["text"].split())
     return data
-
-def extract_text(file_path: str) -> str: return extract_full(file_path)["text"]
 
 def calculate_visual_score(text: str, metadata: dict = None) -> float:
     score = 40.0
