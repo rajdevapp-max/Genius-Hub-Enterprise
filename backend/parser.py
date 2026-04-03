@@ -1,7 +1,7 @@
 """
-parser.py — Enhanced Resume Parser v15.0
-Extracts text, hyperlinks, images, fonts, certificates.
-Features: Deep PDF Table alignment, Horizontal block sorting to protect invisible grids.
+parser.py — Enhanced Resume Parser v16.0
+Extracts text, hyperlinks, images, fonts, certificates, and DEEP PDF/DOCX TABLES.
+Table data boundaries are preserved using logical reflow delimiters (|, \n).
 """
 import os
 import re
@@ -40,8 +40,9 @@ def extract_text_from_pdf(file_path: str) -> dict:
                     tables = page.extract_tables()
                     for table in tables:
                         for row in table:
+                            # 🎯 Table Boundary Fix: Delimit cells with | and rows with newline
                             row_text = " | ".join([str(cell).replace('\n', ' ').strip() for cell in row if cell])
-                            if row_text: all_text.append(row_text)
+                            if row_text: all_text.append(row_text + "\n") 
         except: pass
 
         for page_num in range(min(len(doc), MAX_PAGES)):
@@ -50,7 +51,7 @@ def extract_text_from_pdf(file_path: str) -> dict:
                 uri = link.get("uri", "")
                 if uri and uri.startswith("http"): result["hyperlinks"].append(uri)
             
-            # 🎯 THE FIX: Force strict left-to-right horizontal sorting to emulate tables!
+            # Use default reading order for regular text blocks
             blocks = page.get_text("blocks")
             blocks.sort(key=lambda b: (round(b[1], -1), b[0]))
             page_text = [b[4].strip() for b in blocks if b[6] == 0 and b[4].strip()]
@@ -122,15 +123,18 @@ def extract_text_from_docx(file_path: str) -> dict:
         table_texts = []
         font_set = {}
         
+        # 🎯 THE FIX: Extreme Table Re-Flow for Rutul Shah table parsing
+        # Iterates strictly by row -> cell to replicate visual grid in raw text output.
         for table in doc.tables:
             for row in table.rows:
                 row_data = []
                 for cell in row.cells:
+                    # Clean the cell text and delimit internal newlines with |
                     clean_cell = cell.text.strip().replace('\n', ' | ')
-                    if clean_cell and clean_cell not in row_data: 
-                        row_data.append(clean_cell)
+                    if clean_cell: row_data.append(clean_cell)
                 if row_data:
-                    table_texts.append(" | ".join(row_data))
+                    # Delimit columns with | and add a newline to replicate the row boundary
+                    table_texts.append(" | ".join(row_data) + "\n") 
         
         MAX_PARAGRAPHS = 500
         for i, para in enumerate(doc.paragraphs):
@@ -156,6 +160,7 @@ def extract_text_from_docx(file_path: str) -> dict:
         for rel in doc.part.rels.values():
             if "image" in rel.reltype: result["has_image"] = True; break
         
+        # Merge structured table text with paragraph text
         final_text = table_texts + texts
         result["text"] = "\n".join(final_text).strip()
         result["fonts"] = {fname: {"sizes": sorted(list(fdata["sizes"])), "count": fdata["count"]} for fname, fdata in font_set.items()}
