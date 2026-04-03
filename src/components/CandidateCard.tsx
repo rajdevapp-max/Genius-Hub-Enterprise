@@ -1,17 +1,17 @@
 import { motion } from 'framer-motion';
 import {
   MapPin, Briefcase, GraduationCap, Download, Award,
-  Link as LinkIcon, Bookmark, BookmarkCheck, Trophy, Eye, AlertTriangle, TrendingUp, Search, UserMinus, Github
+  Link as LinkIcon, Bookmark, BookmarkCheck, Trophy, Eye, AlertTriangle, TrendingUp, Search, UserMinus, Github, Trash2
 } from 'lucide-react';
 import ATSScoreRing from './ATSScoreRing';
 import { api } from '@/lib/api';
 
-// 🎯 THE FIX: This safely neutralizes special characters like '+' in 'C++' so they don't break the highlighter!
 const escapeRegExp = (string: string) => {
   return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 };
 
-export default function CandidateCard({ candidate, rank, bookmarked, blindMode = false, onBookmark, onViewDetail }: any) {
+// 🎯 NEW: Added `onDelete` to the props!
+export default function CandidateCard({ candidate, rank, bookmarked, blindMode = false, onBookmark, onViewDetail, onDelete }: any) {
   const certs = candidate.certificates || [];
   const links = candidate.hyperlinks || [];
   const isNameMatch = candidate.match_type === 'name';
@@ -149,7 +149,6 @@ export default function CandidateCard({ candidate, rank, bookmarked, blindMode =
           {candidate.context_snippets && candidate.context_snippets.length > 0 && (
              <div className="mt-2 mb-1 flex flex-col gap-1">
                {candidate.context_snippets.slice(0, 2).map((snippet: any, idx: number) => {
-                 // 🎯 THE IMPLEMENTATION: Escaping the skill before creating the RegExp
                  const safeSkill = escapeRegExp(snippet.skill);
                  return (
                  <div key={idx} className="flex items-start gap-2 text-[10px] text-muted-foreground bg-secondary/30 p-1.5 rounded-md border border-border/50">
@@ -177,6 +176,19 @@ export default function CandidateCard({ candidate, rank, bookmarked, blindMode =
               {bookmarked ? <BookmarkCheck className="w-3.5 h-3.5" /> : <Bookmark className="w-3.5 h-3.5" />}
             </motion.button>
           )}
+          
+          {/* 🎯 NEW: DELETE PROFILE BUTTON (Placed right where you asked!) */}
+          {onDelete && !blindMode && (
+             <motion.button 
+              whileHover={{ scale: 1.1 }} 
+              whileTap={{ scale: 0.9 }} 
+              onClick={(e) => { e.stopPropagation(); onDelete(candidate.id, candidate.name); }}
+              className="p-1.5 rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors" 
+              title="Permanently Delete Profile">
+              <Trash2 className="w-3.5 h-3.5" />
+            </motion.button>
+          )}
+
           {!blindMode && (
             <a href={api.downloadResume(candidate.filename)} target="_blank" rel="noopener noreferrer"
               className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-primary transition-colors">

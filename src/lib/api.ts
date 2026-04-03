@@ -1,38 +1,27 @@
-"""
-api.ts — Unified API Client Layer v30.0
-Features: Infinite Demo Routing, Vercel multi-project routing, 
-and correct endpoint definitions.
-"""
+// api.ts — Unified API Client Layer v30.0
+// Features: Infinite Demo Routing, Vercel multi-project routing, and correct endpoint definitions.
+
 import type { SearchRequest, SearchResponse, JDMatchRequest, JDMatchResponse, StatsResponse, UploadResponse, LiveStatus, Candidate } from './types';
 
 // --- THE INFINITE DEMO ROUTER ---
-// 1. First, check if this is a Vercel-specific project URL (like genius-hub-client.vercel.app)
 const VERCEL_PROJECT_URL = import.meta.env.VITE_VERCEL_URL;
 let API_URL: string;
 
 if (VERCEL_PROJECT_URL && VERCEL_PROJECT_URL.includes('vercel.app')) {
   const parts = VERCEL_PROJECT_URL.split('.vercel.app')[0].split('-');
-  const companyName = parts[parts.length - 1]; // e.g., 'genius'
-  // Point to the dedicated backend Space for this client project
+  const companyName = parts[parts.length - 1];
   API_URL = `https://vinu019-${companyName}.hf.space`;
 } else {
-  // 2. Fallback to reading 'demo' from the URL query param for generic projects (like resume-bats.vercel.app)
   const params = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : new URLSearchParams();
-  const demoBackend = params.get('demo'); // e.g., 'genius' or 'tesla'
-
-  // If it's a demo link, point to the dedicated demo Space. Otherwise, use the standard Production backend.
+  const demoBackend = params.get('demo'); 
   API_URL = demoBackend 
     ? `https://vinu019-${demoBackend}.hf.space` 
     : (import.meta.env.VITE_API_URL || 'https://vinu019-resume-backend.hf.space');
 }
 
-// Global configuration is complete.
-
 const apiFetch = async <T>(endpoint: string, options?: RequestInit): Promise<T> => {
   const res = await fetch(`${API_URL}${endpoint}`, {
-    headers: {
-      'Content-Type': 'application/json',
-    },
+    headers: { 'Content-Type': 'application/json' },
     ...options,
   });
   if (!res.ok) throw new Error(`API Error: ${res.status} ${res.statusText}`);
@@ -73,7 +62,6 @@ export const api = {
       body: JSON.stringify(data),
     }),
 
-  // MODIFIED: Updated matchJD function to accept location for correct matching logic
   matchJD: (data: JDMatchRequest & { location?: string }) =>
     apiFetch<JDMatchResponse>('/api/match-jd', {
       method: 'POST',
@@ -104,7 +92,6 @@ export const api = {
     total_duplicate_files: number;
   }>('/api/duplicates'),
 
-  // MODIFIED: Changed route from POST /api/resumes to POST /api/duplicates/remove for safety
   removeDuplicates: (dryRun: boolean = false) =>
     apiFetch<{ removed: number; groups: number; errors: number; dry_run: boolean }>(
       `/api/duplicates/remove?dry_run=${dryRun}`, { method: 'POST' }
@@ -127,4 +114,16 @@ export const api = {
     if (!res.ok) throw new Error(`Batch upload failed: ${res.status}`);
     return res.json();
   },
+
+  deleteCandidate: (id: number) =>
+    apiFetch<{ message: string }>(`/api/candidate/${id}`, { method: 'DELETE' }),
+
+  deleteResume: (id: number) =>
+    apiFetch<{ message: string }>(`/api/candidate/${id}`, { method: 'DELETE' }),
+
+  exportCSV: (ids?: number[]) =>
+    `${API_URL}/api/export${ids?.length ? `?ids=${ids.join(',')}` : ''}`,
+
+  downloadResume: (filename: string) =>
+    `${API_URL}/api/resumes/${encodeURIComponent(filename)}`,
 };
