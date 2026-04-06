@@ -1,6 +1,6 @@
 """
-classifier.py — Multi-AI NER & Skill Extraction v26.0
-Features: God-Mode Enterprise Dictionary, Clever Name/Email Fallback, Nuclear UI/UX Blacklist.
+classifier.py — Multi-AI NER & Skill Extraction v34.0 (Enterprise Scoring Edition)
+Features: Confidence Scoring + Voting System for Names and Geo-Intelligence Engine.
 """
 import os
 import re
@@ -21,8 +21,6 @@ STATE_MAPPING = {
     "va": "Virginia", "wa": "Washington", "wv": "West Virginia", "wi": "Wisconsin", "wy": "Wyoming"
 }
 
-# 🎯 THE FIX: GOD-MODE SKILL DICTIONARY
-# Added RPA, IBM tools, legacy scripts, and hundreds of enterprise skills so tables parse perfectly.
 SKILL_PATTERNS = [
     "python", "java", "javascript", "typescript", "c++", "c#", "go", "rust",
     "kotlin", "swift", "ruby", "php", "scala", "perl", "r programming", "shell", "bash", "unix shell",
@@ -58,6 +56,15 @@ SKILL_PATTERNS = [
     "stripe", "twilio", "auth0", "nginx", "apache", "c", "node", "underscore", "js",
     "ibm mdm", "websphere", "open liberty", "blue prism", "uipath", "automation anywhere", "rpa", "bmc remedy", "servicenow", "snow", "middleware"
 ]
+
+ANTI_NAME_DICT = set(SKILL_PATTERNS + [
+    "management", "wealth", "project", "server", "application", "system", "database", "developer", 
+    "engineer", "analyst", "administrator", "technologies", "solutions", "summary", "experience", 
+    "resume", "curriculum", "vitae", "cv", "profile", "page", "senior", "junior", "lead", "consultant", 
+    "manager", "professional", "skills", "cloud", "data", "science", "architect", "software", 
+    "development", "and", "libraries", "modules", "frameworks", "api", "platforms", "frontend", 
+    "backend", "web", "app", "network", "agile", "scrum", "ui", "ux", "scripting", "programming", "tools", "service"
+])
 
 KNOWLEDGE_GRAPH = {
     "react": ["frontend", "javascript", "web development", "ui/ux"],
@@ -129,54 +136,6 @@ def generate_summary(text: str) -> Optional[str]:
     clean_text = re.sub(r'\s+', ' ', text).strip()
     return clean_text[:300] + "..." if len(clean_text) > 300 else clean_text
 
-def extract_name(text: str, filename: str = "") -> str:
-    lines = [l.strip() for l in text.split('\n') if l.strip()]
-    
-    # 🎯 THE FIX: Expanded Nuclear UI/UX/Jquery blocklist
-    exclusions = {"management", "wealth", "project", "server", "application", "system", "database", "developer", "engineer", "analyst", "administrator", "technologies", "solutions", "summary", "experience", "resume", "curriculum", "vitae", "cv", "profile", "page", "senior", "junior", "lead", "consultant", "manager", "professional", "skills", "aws", "gcp", "azure", "cloud", "data", "science", "architect", "oracle", "postgresql", "sql", "mysql", "react", "angular", "vue", "java", "python", "software", "development", "and", "libraries", "node", "modules", "frameworks", "api", "platforms", "underscore", "js", "frontend", "backend", "web", "app", "network", "agile", "scrum", "jquery", "ui", "ux", "scripting", "programming", "tools", "service"}
-
-    for line in lines[:15]:
-        chunks = re.split(r'[|,\t\-\–]', line)
-        for chunk in chunks:
-            chunk = chunk.strip()
-            if not chunk or len(chunk) < 3: continue
-            if '@' in chunk or re.search(r'\d{4,}', chunk) or 'linkedin' in chunk.lower() or 'github' in chunk.lower(): 
-                continue
-
-            words = chunk.split()
-            if 1 < len(words) <= 5:
-                # Extreme Name Rejection
-                if any(w.lower() in exclusions for w in words) or any(w.lower() in SKILL_PATTERNS for w in words): 
-                    continue
-                
-                cap_count = sum(1 for w in words if w and w[0].isupper() and w.isalpha())
-                if cap_count >= len(words) - 1 and cap_count > 0:
-                    clean_chunk = re.sub(r'[^a-zA-Z\s]', '', chunk).strip()
-                    if clean_chunk and len(clean_chunk.split()) > 1:
-                        return clean_chunk.title()
-
-    # 🎯 THE CLEVER FALLBACK: Force extraction from Filename FIRST before Email.
-    # Why? Because '10199_1716...LIKHITHA-MAHESWARI.docx' perfectly cleanly splits into "Likhitha Maheswari"
-    if filename:
-        clean_fn = re.sub(r'[\d_+\-\.]', ' ', filename).replace('pdf', '').replace('docx', '').replace('doc', '')
-        words = [w for w in clean_fn.split() if len(w) > 2 and w.lower() not in exclusions and w.lower() not in SKILL_PATTERNS]
-        if words: return " ".join(words[:2]).title()
-
-    # Advanced Email Parser Fallback
-    email_match = re.search(r'([a-zA-Z0-9._-]+)@[a-zA-Z0-9._-]+\.[a-zA-Z0-9_-]+', text)
-    if email_match:
-        prefix = email_match.group(1).lower()
-        parts = re.split(r'[._-]', prefix)
-        clean_parts = [re.sub(r'[^a-zA-Z]', '', p).strip() for p in parts]
-        valid_parts = [p for p in clean_parts if len(p) > 1 and p not in exclusions and p not in SKILL_PATTERNS]
-        
-        if len(valid_parts) >= 2:
-            return f"{valid_parts[0].title()} {valid_parts[1].title()}"
-        elif len(valid_parts) == 1:
-            return valid_parts[0].title()
-
-    return "Unknown"
-
 def extract_email(text: str) -> str:
     match = re.search(r'[\w.-]+@[\w.-]+\.\w+', text)
     return match.group(0) if match else ""
@@ -185,62 +144,114 @@ def extract_phone(text: str) -> str:
     match = re.search(r'(?:\+?\d{1,3}[-\s]?)?\(?\d{3}\)?[-\s]?\d{3}[-\s]?\d{4}', text)
     return match.group(0) if match else ""
 
-def extract_location(text: str, phone: str = "") -> str:
-    search_block = text[:4000] 
-    search_lower = search_block.lower()
+# 🚀 STEP 1.1: MULTI-LAYER NAME RESOLUTION ENGINE
+def extract_name(text: str, filename: str = "", email: str = "") -> str:
+    candidates = {} # Dictionary to hold { "Name String": Confidence_Score }
 
+    def add_candidate(name: str, score: int):
+        clean = re.sub(r'[^a-zA-Z\s]', '', name).strip().title()
+        if not clean or len(clean) < 3: return
+        
+        # NUCLEAR FILTER: Reject if ANY word is in the Anti-Name Dict
+        words = clean.lower().split()
+        if any(w in ANTI_NAME_DICT for w in words): return
+        
+        candidates[clean] = candidates.get(clean, 0) + score
+
+    # 1. Top-of-Resume Positional Heuristic
+    lines = [l.strip() for l in text[:1000].split('\n') if l.strip()]
+    for idx, line in enumerate(lines[:10]):
+        chunks = re.split(r'[|,\t\-\–]', line)
+        for chunk in chunks:
+            chunk = chunk.strip()
+            if '@' in chunk or re.search(r'\d{4,}', chunk) or 'linkedin' in chunk.lower(): continue
+            words = chunk.split()
+            if 1 < len(words) <= 4:
+                cap_count = sum(1 for w in words if w and w[0].isupper() and w.isalpha())
+                if cap_count >= len(words) - 1:
+                    # Give high points to line 0, fewer points as we go down
+                    score = 8 if idx < 3 else 4
+                    add_candidate(chunk, score)
+
+    # 2. Advanced Email Parsing Engine (doe_john123@ -> John Doe)
+    if email:
+        prefix = email.split('@')[0].lower()
+        parts = re.split(r'[._-]', prefix)
+        clean_parts = [re.sub(r'[^a-zA-Z]', '', p).strip() for p in parts]
+        valid_parts = [p for p in clean_parts if len(p) > 1 and p not in ANTI_NAME_DICT]
+        
+        if len(valid_parts) >= 2:
+            # Surnam.Firstname reverse check (gives massive +10 confidence)
+            add_candidate(f"{valid_parts[0]} {valid_parts[1]}", 10)
+            add_candidate(f"{valid_parts[1]} {valid_parts[0]}", 10) 
+        elif len(valid_parts) == 1:
+            add_candidate(valid_parts[0], 5)
+
+    # 3. Filename Fallback
+    if filename:
+        clean_fn = re.sub(r'[\d_+\-\.]', ' ', filename).replace('pdf', '').replace('docx', '').replace('doc', '')
+        words = [w for w in clean_fn.split() if len(w) > 2 and w.lower() not in ANTI_NAME_DICT]
+        if words: 
+            add_candidate(" ".join(words[:2]), 7)
+
+    # Final Selection: Pick the candidate with the highest confidence score!
+    if not candidates:
+        return "Unknown"
+    
+    best_match = max(candidates.items(), key=lambda x: x[1])
+    return best_match[0]
+
+# 🚀 STEP 1.2: GEO-INTELLIGENCE ENGINE (Weighted Location Scoring)
+def extract_location(text: str, phone: str = "") -> str:
+    scores = {"USA": 0, "India": 0, "UK": 0, "Australia": 0, "Canada": 0}
+    search_lower = text[:3000].lower() 
+    best_exact_city = ""
+
+    # Signal 1: Phone Country Code (+10 Points)
+    if phone:
+        clean_phone = re.sub(r'[^\d+]', '', phone)
+        if clean_phone.startswith("+1"): scores["USA"] += 10
+        elif clean_phone.startswith("+91") or (clean_phone.startswith("91") and len(clean_phone) == 12): scores["India"] += 10
+        elif clean_phone.startswith("+44"): scores["UK"] += 10
+        elif clean_phone.startswith("+61"): scores["Australia"] += 10
+        elif len(clean_phone) == 10:
+            area_code = clean_phone[:3]
+            us_high_area_codes = {"602","603","605","606","607","608","609","610","612","614","615","616","617","618","619","620","623","626","628","630","631","636","646","650","651","657","660","661","662","669","678","682","701","702","703","704","706","707","708","712","713","714","715","716","717","718","719","720","724","727","731","732","734","740","743","747","754","757","760","763","770","772","773","774","775","779","781","785","786","787","801","802","803","804","805","806","808","810","812","813","814","815","816","817","818","828","830","831","832","843","845","847","848","850","856","857","858","859","860","862","863","864","865","870","872","878","901","903","904","906","907","908","909","910","912","913","914","915","916","917","918","919","920","925","928","929","931","936","937","938","940","941","947","949","951","952","954","956","959","970","971","972","973","978","979","980","984","985","989"}
+            if area_code in us_high_area_codes or area_code[0] in "2345": scores["USA"] += 8
+            elif area_code[0] in "6789": scores["India"] += 8
+
+    # Signal 2: Explicit Address Block (+9 Points)
     global_pat = r'(?:Location|Address|City|Based in|Located in|From)[:\s]+([A-Za-z\s,]{2,40})'
     global_match = re.search(global_pat, text[:1500], re.IGNORECASE)
     if global_match:
         extracted = global_match.group(1).strip().split('\n')[0][:50]
         blockers = {"pipeline", "server", "architecture", "data", "engineering", "platform"}
         if extracted and not any(b in extracted.lower() for b in blockers):
-            if "india" in extracted.lower() or "ind" in extracted.lower(): return f"{extracted} (India)"
-            if "usa" in extracted.lower() or "us" in extracted.lower(): return f"{extracted} (USA)"
-            return extracted
+            best_exact_city = extracted
+            if "india" in extracted.lower() or "ind" in extracted.lower(): scores["India"] += 9
+            if "usa" in extracted.lower() or "us" in extracted.lower(): scores["USA"] += 9
 
-    if phone:
-        clean_phone = re.sub(r'[^\d+]', '', phone)
-        if clean_phone.startswith("+1"): return "USA"
-        if clean_phone.startswith("+91") or (clean_phone.startswith("91") and len(clean_phone) == 12): return "India"
-        if clean_phone.startswith("+44"): return "UK"
-        if clean_phone.startswith("+61"): return "Australia"
-        if len(clean_phone) == 10:
-            area_code = clean_phone[:3]
-            us_high_area_codes = {"602","603","605","606","607","608","609","610","612","614","615","616","617","618","619","620","623","626","628","630","631","636","646","650","651","657","660","661","662","669","678","682","701","702","703","704","706","707","708","712","713","714","715","716","717","718","719","720","724","727","731","732","734","740","743","747","754","757","760","763","770","772","773","774","775","779","781","785","786","787","801","802","803","804","805","806","808","810","812","813","814","815","816","817","818","828","830","831","832","843","845","847","848","850","856","857","858","859","860","862","863","864","865","870","872","878","901","903","904","906","907","908","909","910","912","913","914","915","916","917","918","919","920","925","928","929","931","936","937","938","940","941","947","949","951","952","954","956","959","970","971","972","973","978","979","980","984","985","989"}
-            if area_code in us_high_area_codes or area_code[0] in "2345": return "USA"
-            if area_code[0] in "6789": return "India"
-
-    city_state_match_top = re.search(r'([a-z\s]{3,20}),\s*(al|ak|az|ar|ca|co|ct|de|fl|ga|hi|id|il|in|ia|ks|ky|la|me|md|ma|mi|mn|ms|mo|mt|ne|nv|nh|nj|nm|ny|nc|nd|oh|ok|or|pa|ri|sc|sd|tn|tx|ut|vt|va|wa|wv|wi|wy)\b', search_lower[:1500])
-    if city_state_match_top:
-        city = city_state_match_top.group(1).strip().split('\n')[-1].title()
-        blockers = {"pipeline", "server", "architecture", "data", "engineering", "platform"}
-        if city and not any(b in city.lower() for b in blockers):
-            state_code = city_state_match_top.group(2).lower()
-            return f"{city}, {STATE_MAPPING.get(state_code, state_code.upper())} (USA)"
-
-    zip_match = re.search(r'\b([A-Z]{2})\s*(\d{5})\b', search_block[:1500])
-    if zip_match:
-        state_code = zip_match.group(1).lower()
-        if state_code in STATE_MAPPING:
-            return f"{STATE_MAPPING[state_code]} (USA)"
-
+    # Signal 3: US City/State or ZIP Code (+6 Points)
     us_states_full = r'\b(alabama|alaska|arizona|arkansas|california|colorado|connecticut|delaware|florida|georgia|hawaii|idaho|illinois|indiana|iowa|kansas|kentucky|louisiana|maine|maryland|massachusetts|michigan|minnesota|mississippi|missouri|montana|nebraska|nevada|new hampshire|new jersey|new mexico|new york|north carolina|north dakota|ohio|oklahoma|oregon|pennsylvania|rhode island|south carolina|south dakota|tennessee|texas|utah|vermont|virginia|washington|west virginia|wisconsin|wyoming)\b'
     us_cities = r'\b(los angeles|chicago|houston|phoenix|philadelphia|san antonio|san diego|dallas|san jose|austin|jacksonville|fort worth|columbus|san francisco|charlotte|indianapolis|seattle|denver|boston|el paso|nashville|detroit|oklahoma city|portland|las vegas|memphis|louisville|baltimore|milwaukee|albuquerque|tucson|fresno|sacramento|kansas city|mesa|atlanta|omaha|colorado springs|raleigh|miami|oakland|minneapolis|tulsa|bakersfield|wichita|arlington|ny|la|sf|west chester)\b'
-    india_cities = r'\b(mumbai|delhi|bangalore|bengaluru|hyderabad|chennai|pune|gurgaon|gurugram|noida|kolkata|ahmedabad|kerala|maharashtra|karnataka|tamil nadu)\b'
-
-    if re.search(r'\b(usa|united states|us|america)\b', search_lower): return "USA"
-    if re.search(r'\b(india|ind)\b', search_lower): return "India"
     
-    city_match = re.search(us_cities, search_lower)
-    if city_match: return f"{city_match.group(1).title()} (USA)"
-        
-    state_match = re.search(us_states_full, search_lower)
-    if state_match: return f"{state_match.group(1).title()} (USA)"
+    if re.search(r'\b([A-Z]{2})\s*(\d{5})\b', search_lower[:1500]) or re.search(us_states_full, search_lower) or re.search(us_cities, search_lower):
+        scores["USA"] += 6
 
-    ind_city_match = re.search(india_cities, search_lower)
-    if ind_city_match: return f"{ind_city_match.group(1).title()} (India)"
+    # Signal 4: India Cities (+6 Points)
+    india_cities = r'\b(mumbai|delhi|bangalore|bengaluru|hyderabad|chennai|pune|gurgaon|gurugram|noida|kolkata|ahmedabad|kerala|maharashtra|karnataka|tamil nadu)\b'
+    if re.search(india_cities, search_lower):
+        scores["India"] += 6
 
+    # Determine Winner
+    winner = max(scores.items(), key=lambda x: x[1])
+    
+    # If a strict City block was found, prepend it to the winning country
+    if winner[1] > 0:
+        if best_exact_city and winner[0] not in best_exact_city:
+            return f"{best_exact_city} ({winner[0]})"
+        return winner[0]
+    
     return ""
 
 def extract_education(text: str) -> str:
@@ -304,6 +315,10 @@ def analyze_experience(text: str) -> dict:
     }
 
 def classify_resume(text: str, filename: str = "") -> dict:
+    email = extract_email(text)
+    # Passed email into the name extractor for the new Voting system!
+    name = extract_name(text, filename, email)
+    
     all_skills = extract_all_skills(text)
     summary = generate_summary(text)
     impact_score = extract_impact_metrics(text)
@@ -321,8 +336,8 @@ def classify_resume(text: str, filename: str = "") -> dict:
     else: fake_full_stack = False
 
     return {
-        "name": extract_name(text, filename),
-        "email": extract_email(text),
+        "name": name,
+        "email": email,
         "phone": extract_phone(text),
         "location": extract_location(text, extract_phone(text)),
         "education": extract_education(text),
