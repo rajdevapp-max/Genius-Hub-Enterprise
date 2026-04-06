@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { ThemeToggle, useTheme } from '@/components/ThemeToggle';
 
 const navItems = [
-  { path: '/', label: 'AI Search', icon: Search, desc: 'Hybrid intelligence' },
+  { path: '/', label: 'GeniusHub Search', icon: Search, desc: 'Hybrid intelligence' },
   { path: '/jd-match', label: 'JD Match', icon: FileText, desc: 'Job description match' },
   { path: '/analytics', label: 'Analytics', icon: BarChart3, desc: 'Real-time dashboard' },
   { path: '/upload', label: 'Upload', icon: Upload, desc: 'Add resumes' },
