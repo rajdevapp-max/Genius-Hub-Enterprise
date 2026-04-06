@@ -17,9 +17,29 @@ export default function JDMatchPage() {
   const [error, setError] = useState('');
   const [selectedCandidate, setSelectedCandidate] = useState<Candidate | null>(null);
 
+  // 🎯 SaaS USAGE TRACKER STATE
+  const MONTHLY_LIMIT = 100;
+  const [usageCount, setUsageCount] = useState(0);
+  const isDemo = typeof window !== 'undefined' && !!new URLSearchParams(window.location.search).get('demo');
+
   const [bookmarks, setBookmarks] = useState<Set<number>>(() => {
     try { return new Set(JSON.parse(localStorage.getItem('bookmarks') || '[]')); } catch { return new Set(); }
   });
+
+  // 🎯 LOAD USAGE ON MOUNT (Survives login/logout)
+  useEffect(() => {
+    if (isDemo) {
+      const date = new Date();
+      const monthKey = `jd_usage_${date.getFullYear()}_${date.getMonth()}`; // Resets every month automatically!
+      const storedUsage = localStorage.getItem(monthKey);
+      
+      if (storedUsage) {
+        setUsageCount(parseInt(storedUsage, 10));
+      } else {
+        localStorage.setItem(monthKey, '0');
+      }
+    }
+  }, [isDemo]);
 
   useEffect(() => {
     localStorage.setItem('bookmarks', JSON.stringify([...bookmarks]));
@@ -33,7 +53,6 @@ export default function JDMatchPage() {
     });
   };
 
-  // 🎯 NEW: Secure Delete Function for JD Match
   const handleDelete = async (id: number, name: string) => {
     if (!window.confirm(`Are you sure you want to permanently delete ${name}'s resume?`)) return;
     try {
@@ -47,13 +66,37 @@ export default function JDMatchPage() {
 
   const handleMatch = async () => {
     if (!jd.trim()) return;
+
+    // 🎯 THE ACTUAL HARD-BLOCK (Protects the API call)
+    if (isDemo) {
+      const date = new Date();
+      const monthKey = `jd_usage_${date.getFullYear()}_${date.getMonth()}`;
+      const currentUsage = parseInt(localStorage.getItem(monthKey) || '0', 10);
+      
+      if (currentUsage >= MONTHLY_LIMIT) {
+        setError(`Monthly Limit Reached: You have exhausted your ${MONTHLY_LIMIT} JD matches for this month. Please wait until next month.`);
+        return; // ABSOLUTE STOP: Prevents API from firing
+      }
+    }
+
     setResult(null);
     setLoading(true);
     setError('');
     try {
-      // 🎯 NEW: Send Location to Backend
       const data = await api.matchJD({ job_description: jd, top_k: 30, location: location.trim() });
       setResult(data);
+
+      // 🎯 INCREMENT USAGE ON SUCCESS
+      if (isDemo) {
+        const date = new Date();
+        const monthKey = `jd_usage_${date.getFullYear()}_${date.getMonth()}`;
+        const currentUsage = parseInt(localStorage.getItem(monthKey) || '0', 10);
+        const newUsage = currentUsage + 1;
+        
+        localStorage.setItem(monthKey, newUsage.toString());
+        setUsageCount(newUsage);
+      }
+
     } catch (e: any) {
       setError(e.message || 'Match failed.');
     } finally {
@@ -110,7 +153,6 @@ export default function JDMatchPage() {
               <div className="absolute bottom-3 right-3 text-[10px] font-mono text-muted-foreground">{jd.length} chars</div>
             </div>
             
-            {/* 🎯 NEW: Location Input Box */}
             <div className="relative">
               <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <input 
@@ -130,6 +172,32 @@ export default function JDMatchPage() {
               <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
                 onClick={() => setJd(SAMPLE_JD)} className="btn-ghost-glow">Sample JD</motion.button>
             </div>
+
+            {/* 🎯 SAAS USAGE TRACKER UI (Only visible in Demo) */}
+            {isDemo && (
+              <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="mt-6 bg-[#0f172a] p-5 rounded-xl border border-gray-800 shadow-lg">
+                <div className="flex justify-between items-center text-sm text-gray-400 mb-3 font-display font-semibold tracking-wide">
+                  <span className="flex items-center gap-2"><Target className="w-4 h-4 text-primary" /> DEMO QUOTA</span>
+                  <span className={usageCount >= MONTHLY_LIMIT ? "text-destructive" : "text-primary"}>
+                    {usageCount} / {MONTHLY_LIMIT} JDs
+                  </span>
+                </div>
+                
+                <div className="w-full bg-gray-800/80 rounded-full h-2 overflow-hidden border border-gray-700/50">
+                  <div 
+                    className={`h-full transition-all duration-700 ease-out ${usageCount >= MONTHLY_LIMIT ? 'bg-destructive' : 'bg-gradient-to-r from-primary to-accent'}`}
+                    style={{ width: `${Math.min((usageCount / MONTHLY_LIMIT) * 100, 100)}%` }}
+                  ></div>
+                </div>
+                
+                {usageCount >= MONTHLY_LIMIT && (
+                  <p className="text-destructive text-xs mt-3 flex items-center gap-1.5 font-medium">
+                    <AlertTriangle className="w-3.5 h-3.5" /> Limit reached. Renews next month.
+                  </p>
+                )}
+              </motion.div>
+            )}
+
           </motion.div>
 
           <AnimatePresence mode="wait">
@@ -209,7 +277,7 @@ export default function JDMatchPage() {
         </div>
 
         {error && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="glass-panel p-5 border-destructive/20">
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="glass-panel p-5 border-destructive/20 mt-6">
             <p className="text-sm text-destructive flex items-center gap-2"><XCircle className="w-4 h-4" />{error}</p>
           </motion.div>
         )}
@@ -229,7 +297,7 @@ export default function JDMatchPage() {
                   bookmarked={bookmarks.has(c.id)}
                   onBookmark={() => toggleBookmark(c.id)}
                   onViewDetail={() => setSelectedCandidate(c)} 
-                  onDelete={handleDelete} // 🎯 NEW: DELETE HOOKED UP
+                  onDelete={handleDelete} 
                 />
               ))}
             </motion.div>
@@ -240,7 +308,7 @@ export default function JDMatchPage() {
       <CandidateModal
         candidate={selectedCandidate}
         onClose={() => setSelectedCandidate(null)}
-        onDelete={handleDelete} // 🎯 NEW: DELETE HOOKED UP
+        onDelete={handleDelete} 
       />
     </>
   );
