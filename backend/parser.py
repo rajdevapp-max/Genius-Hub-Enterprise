@@ -1,13 +1,13 @@
 """
-parser.py — Enhanced Resume Parser v16.0
-Extracts text, hyperlinks, images, fonts, certificates, and DEEP PDF/DOCX TABLES.
-Table data boundaries are preserved using logical reflow delimiters (|, \n).
+parser.py — Enhanced Resume Parser v17.0 (Layout Preservation Edition)
+Extracts text, hyperlinks, images, fonts, and DEEP PDF/DOCX TABLES.
+Features: Mathematical Layout Preservation for 2-Column Resumes and Skill Grids.
 """
 import os
 import re
 import hashlib
 import zipfile
-import fitz
+import fitz  # PyMuPDF
 import pdfplumber
 from docx import Document
 from PIL import Image
@@ -34,29 +34,33 @@ def extract_text_from_pdf(file_path: str) -> dict:
         all_text = []
         MAX_PAGES = 10 
         
+        # 1. ADVANCED TABLE EXTRACTION (Forces Grid Boundaries)
         try:
             with pdfplumber.open(file_path) as pdf:
                 for page in pdf.pages[:MAX_PAGES]:
+                    # Extract explicit tables
                     tables = page.extract_tables()
                     for table in tables:
                         for row in table:
-                            # 🎯 Table Boundary Fix: Delimit cells with | and rows with newline
+                            # Use | to separate cells, \n to separate rows
                             row_text = " | ".join([str(cell).replace('\n', ' ').strip() for cell in row if cell])
-                            if row_text: all_text.append(row_text + "\n") 
+                            if row_text: all_text.append(row_text + "\n")
+                    
+                    # 2. LAYOUT-PRESERVING EXTRACTION (For 2-column resumes & skill charts)
+                    # This tells the parser to maintain visual spaces so columns don't mash together
+                    layout_text = page.extract_text(layout=True)
+                    if layout_text:
+                        # Clean up excessive blank space while maintaining layout breaks
+                        cleaned_layout = re.sub(r' {4,}', ' | ', layout_text)
+                        all_text.append(cleaned_layout)
         except: pass
 
+        # 3. METADATA & FRAUD DETECTION (PyMuPDF)
         for page_num in range(min(len(doc), MAX_PAGES)):
             page = doc[page_num]
             for link in page.get_links():
                 uri = link.get("uri", "")
                 if uri and uri.startswith("http"): result["hyperlinks"].append(uri)
-            
-            # Use default reading order for regular text blocks
-            blocks = page.get_text("blocks")
-            blocks.sort(key=lambda b: (round(b[1], -1), b[0]))
-            page_text = [b[4].strip() for b in blocks if b[6] == 0 and b[4].strip()]
-            full_page_text = "\n".join(page_text)
-            all_text.append(full_page_text)
             
             dict_blocks = page.get_text("dict", flags=fitz.TEXT_PRESERVE_WHITESPACE)
             for block in dict_blocks.get("blocks", []):
@@ -76,12 +80,14 @@ def extract_text_from_pdf(file_path: str) -> dict:
                 elif block.get("type") == 1: 
                     result["has_image"] = True
             
-            if len(full_page_text.strip()) < 50:
+            # 4. OCR FALLBACK FOR IMAGE-BASED PDFs
+            if len(all_text) < 3: # If the PDF was basically empty (flattened image)
                 for img_info in page.get_images(full=True):
                     try:
                         base_img = doc.extract_image(img_info[0])
                         if base_img and HAS_TESSERACT:
-                            ocr_text = pytesseract.image_to_string(Image.open(io.BytesIO(base_img["image"])), timeout=15)
+                            # psm 4 assumes a single column of text of variable sizes (great for resumes)
+                            ocr_text = pytesseract.image_to_string(Image.open(io.BytesIO(base_img["image"])), config='--psm 4', timeout=15)
                             if ocr_text.strip(): all_text.append(ocr_text)
                     except Exception as ocr_e:
                         pass
@@ -102,17 +108,11 @@ def extract_text_from_pdf(file_path: str) -> dict:
                 extracted_text = []
                 for i, page in enumerate(pdf.pages):
                     if i >= 10: break 
-                    text = page.extract_text()
+                    text = page.extract_text(layout=True)
                     if text: extracted_text.append(text)
                 result["text"] = "\n".join(extracted_text)
         except Exception as salvage_e:
-            try:
-                with open(file_path, 'rb') as f:
-                    content = f.read()
-                    strings = re.findall(b'[a-zA-Z0-9\s,\.\-\@\+]{5,}', content)
-                    result["text"] = " ".join([s.decode('ascii', errors='ignore') for s in strings])
-            except Exception as bin_e:
-                pass
+            pass
     return result
 
 def extract_text_from_docx(file_path: str) -> dict:
@@ -123,17 +123,16 @@ def extract_text_from_docx(file_path: str) -> dict:
         table_texts = []
         font_set = {}
         
-        # 🎯 THE FIX: Extreme Table Re-Flow for Rutul Shah table parsing
-        # Iterates strictly by row -> cell to replicate visual grid in raw text output.
+        # 🎯 EXTREME TABLE RE-FLOW (Ensures Rutul Shah's grid is preserved)
         for table in doc.tables:
             for row in table.rows:
                 row_data = []
                 for cell in row.cells:
-                    # Clean the cell text and delimit internal newlines with |
+                    # Replace newlines inside cells with | to maintain boundary
                     clean_cell = cell.text.strip().replace('\n', ' | ')
                     if clean_cell: row_data.append(clean_cell)
                 if row_data:
-                    # Delimit columns with | and add a newline to replicate the row boundary
+                    # Delimit columns with | and enforce row boundary with \n
                     table_texts.append(" | ".join(row_data) + "\n") 
         
         MAX_PARAGRAPHS = 500
@@ -160,33 +159,20 @@ def extract_text_from_docx(file_path: str) -> dict:
         for rel in doc.part.rels.values():
             if "image" in rel.reltype: result["has_image"] = True; break
         
-        # Merge structured table text with paragraph text
         final_text = table_texts + texts
         result["text"] = "\n".join(final_text).strip()
         result["fonts"] = {fname: {"sizes": sorted(list(fdata["sizes"])), "count": fdata["count"]} for fname, fdata in font_set.items()}
         
     except Exception as e:
-        ext = os.path.splitext(file_path)[1].lower()
-        print(f"[parser] Corrupted or legacy file detected ({os.path.basename(file_path)}). Initiating Salvage...")
-        try:
-            if ext == ".docx":
-                with zipfile.ZipFile(file_path) as docx_zip:
-                    xml_content = docx_zip.read('word/document.xml').decode('utf-8')
-                    result["text"] = " ".join(re.findall(r'<w:t(?:.*?)>(.*?)</w:t>', xml_content))
-            elif ext == ".doc":
-                with open(file_path, 'rb') as f:
-                    content = f.read()
-                    strings = re.findall(b'[a-zA-Z0-9\s,\.\-\@\+]{5,}', content)
-                    result["text"] = " ".join([s.decode('ascii', errors='ignore') for s in strings])
-        except Exception as salvage_e:
-            pass
+        pass
     return result
 
 def extract_text_from_image(file_path: str) -> dict:
     result = {"text": "", "hyperlinks": [], "fonts": {}, "has_image": True, "page_count": 1, "fraud_flag": 0, "fraud_reason": ""}
     if not HAS_TESSERACT: return result
     try:
-        result["text"] = pytesseract.image_to_string(Image.open(file_path), timeout=20).strip()
+        # psm 4 is the best OCR setting for variable column layouts (resumes)
+        result["text"] = pytesseract.image_to_string(Image.open(file_path), config='--psm 4', timeout=20).strip()
     except Exception as e: 
         pass
     return result
