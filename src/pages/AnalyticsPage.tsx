@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom'; // 🎯 NEW: Added navigation hooks
 import { motion } from 'framer-motion';
 import { Users, Clock, TrendingUp, Loader2, Activity, Award, FileImage, FileText, Gauge, MapPin, GraduationCap, Copy, Trash2, AlertTriangle, ShieldCheck } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, AreaChart, Area, LabelList, Label } from 'recharts';
@@ -58,6 +59,9 @@ const aggregateData = (data: any[], key: string, limit = 4) => {
 };
 
 export default function AnalyticsPage() {
+  const navigate = useNavigate(); // 🎯 NEW: Navigation function
+  const routeLocation = useLocation(); // 🎯 NEW: Preserves the ?demo= flag
+
   const [stats, setStats] = useState<StatsResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -194,18 +198,32 @@ export default function AnalyticsPage() {
 
         {/* KPI Stats Grid */}
         <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-          {statCards.map((card, i) => (
-            <GlowingCard key={card.label} className={`p-4 relative overflow-hidden ${card.color === 'destructive' && card.value > 0 && card.label === 'Fraud Detected' ? 'border-destructive/40 bg-destructive/10' : ''}`} delay={i * 0.04}>
-              <div className="flex items-center justify-between mb-3 relative z-10">
-                <div className={`w-8 h-8 rounded-lg flex items-center justify-center bg-${card.color}/10 border border-${card.color}/20`}><card.icon className={`w-4 h-4 text-${card.color}`} /></div>
+          {statCards.map((card, i) => {
+            const isTotalResumes = card.label === 'Total Resumes';
+
+            return (
+              <div 
+                key={card.label}
+                // 🎯 NEW: Safely handles the redirect while preserving the ?demo= link!
+                onClick={isTotalResumes ? () => navigate({ pathname: '/database', search: routeLocation.search }) : undefined}
+                className={isTotalResumes ? "cursor-pointer block" : ""}
+              >
+                <GlowingCard 
+                  className={`p-4 relative overflow-hidden h-full ${isTotalResumes ? 'hover:border-primary/50 transition-all hover:scale-[1.02]' : ''} ${card.color === 'destructive' && card.value > 0 && card.label === 'Fraud Detected' ? 'border-destructive/40 bg-destructive/10' : ''}`} 
+                  delay={i * 0.04}
+                >
+                  <div className="flex items-center justify-between mb-3 relative z-10">
+                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center bg-${card.color}/10 border border-${card.color}/20`}><card.icon className={`w-4 h-4 text-${card.color}`} /></div>
+                  </div>
+                  <div className={`text-2xl font-extrabold font-display relative z-10 ${card.color === 'destructive' && card.value > 0 && card.label === 'Fraud Detected' ? 'text-destructive drop-shadow-[0_0_8px_rgba(var(--destructive-rgb),0.8)]' : 'text-foreground'}`}>
+                    <AnimatedCounter value={card.value} suffix={card.suffix} />
+                  </div>
+                  <p className="text-[9px] text-muted-foreground mt-1 font-display tracking-widest uppercase relative z-10">{card.label}</p>
+                  <div className={`absolute -bottom-4 -right-4 w-24 h-24 rounded-full bg-${card.color}/5 blur-2xl z-0`} />
+                </GlowingCard>
               </div>
-              <div className={`text-2xl font-extrabold font-display relative z-10 ${card.color === 'destructive' && card.value > 0 && card.label === 'Fraud Detected' ? 'text-destructive drop-shadow-[0_0_8px_rgba(var(--destructive-rgb),0.8)]' : 'text-foreground'}`}>
-                <AnimatedCounter value={card.value} suffix={card.suffix} />
-              </div>
-              <p className="text-[9px] text-muted-foreground mt-1 font-display tracking-widest uppercase relative z-10">{card.label}</p>
-              <div className={`absolute -bottom-4 -right-4 w-24 h-24 rounded-full bg-${card.color}/5 blur-2xl z-0`} />
-            </GlowingCard>
-          ))}
+            );
+          })}
           
           {dupCount > 0 && (
             <GlowingCard className="p-4 border-warning/40 bg-warning/5" delay={0.35}>
