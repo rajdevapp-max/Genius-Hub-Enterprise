@@ -177,7 +177,7 @@ def extract_full(file_path: str) -> dict:
     elif ext in (".png", ".jpg", ".jpeg", ".tiff", ".bmp"): data = extract_text_from_image(file_path)
     else: return {"text": "", "hyperlinks": [], "fonts": {}, "has_image": False, "page_count": 0, "fraud_flag": 0, "fraud_reason": ""}
     
-    url_pattern = r'(?:https?://|www\.)[^\s<>"{}|\\^`\[\]]+'
+    url_pattern = r'(?:https?://|www\.|linkedin\.com/in/|github\.com/)[^\s<>"{}|\\^`\[\]]+'
     data["hyperlinks"] = list(set(data.get("hyperlinks", []) + re.findall(url_pattern, data["text"])))
     data["file_hash"] = file_hash(file_path)
     data["word_count"] = len(data["text"].split())

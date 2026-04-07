@@ -1,6 +1,6 @@
 """
-classifier.py — Universal Multi-AI NER & Skill Extraction v36.0 (Universal Architecture)
-Features: Triangular Name Voting, Deep-Scan Flawless Location Routing, Broad Ontology Graph.
+classifier.py — Universal Multi-AI NER & Skill Extraction v37.0 (Weighted Hierarchy)
+Features: Flipped Name Voting Hierarchy (Email > Filename > Text) & Expanded Dictionary.
 """
 import os
 import re
@@ -21,7 +21,6 @@ STATE_MAPPING = {
     "va": "Virginia", "wa": "Washington", "wv": "West Virginia", "wi": "Wisconsin", "wy": "Wyoming"
 }
 
-# 1. UNIVERSAL ONTOLOGY DICTIONARY
 SKILL_PATTERNS = [
     "python", "java", "javascript", "typescript", "c++", "c#", "go", "rust",
     "kotlin", "swift", "ruby", "php", "scala", "perl", "r programming", "shell", "bash", "unix shell",
@@ -58,7 +57,7 @@ SKILL_PATTERNS = [
     "ibm mdm", "websphere", "open liberty", "blue prism", "uipath", "automation anywhere", "rpa", "bmc remedy", "servicenow", "snow", "middleware"
 ]
 
-# 2. UNIVERSAL ANTI-NAME DICTIONARY (Prevents 2-Column / Headers from becoming names)
+# 🎯 EXPANDED: Added "Insurance", "Accelerator", "Profile", "Contact", etc.
 ANTI_NAME_DICT = set(SKILL_PATTERNS + [
     "management", "wealth", "project", "server", "application", "system", "database", "developer", 
     "engineer", "analyst", "administrator", "technologies", "solutions", "summary", "experience", 
@@ -68,7 +67,9 @@ ANTI_NAME_DICT = set(SKILL_PATTERNS + [
     "backend", "web", "app", "network", "agile", "scrum", "ui", "ux", "scripting", "programming", "tools", "service",
     "core", "competencies", "technical", "operating", "systems", "languages", "certification", "compliance",
     "protocols", "prevention", "attack", "flood", "syn", "icmp", "udp", "tcp", "forensic", "security",
-    "threat", "modeling", "driver", "monitoring", "analysis", "information", "objective", "education"
+    "threat", "modeling", "driver", "monitoring", "analysis", "information", "objective", "education",
+    "insurance", "accelerator", "personal", "details", "contact", "overview", "portfolio", "github", "linkedin",
+    "phone", "email", "mail", "address", "location", "city", "state", "zip", "country"
 ])
 
 KNOWLEDGE_GRAPH = {
@@ -149,7 +150,7 @@ def extract_phone(text: str) -> str:
     match = re.search(r'(?:\+?\d{1,3}[-\s]?)?\(?\d{3}\)?[-\s]?\d{3}[-\s]?\d{4}', text)
     return match.group(0) if match else ""
 
-# 3. TRIANGULAR NAME VOTING ENGINE (Universal Evaluator)
+# 🎯 THE FIX: Completely Flipped Hierarchy Voting System
 def extract_name(text: str, filename: str = "", email: str = "") -> str:
     candidates = {}
 
@@ -162,9 +163,9 @@ def extract_name(text: str, filename: str = "", email: str = "") -> str:
         
         candidates[clean] = candidates.get(clean, 0) + score
 
-    # Source 1: Structural Grid Text (First 15 lines of parsed output)
+    # SOURCE 1: Text Fallback (Weakest Truth -> 5 Points max)
     lines = [l.strip() for l in text[:1500].split('\n') if l.strip()]
-    for idx, line in enumerate(lines[:15]):
+    for idx, line in enumerate(lines[:10]):
         chunks = re.split(r'[|,\t\-\–]', line)
         for chunk in chunks:
             chunk = chunk.strip()
@@ -173,10 +174,18 @@ def extract_name(text: str, filename: str = "", email: str = "") -> str:
             if 1 < len(words) <= 4:
                 cap_count = sum(1 for w in words if w and w[0].isupper() and w.isalpha())
                 if cap_count >= len(words) - 1:
-                    score = 8 if idx < 3 else 4
+                    score = 5 if idx < 3 else 3
                     add_candidate(chunk, score)
 
-    # Source 2: Dynamic Email Reconstruction
+    # SOURCE 2: Filename (Strong Truth -> 9 Points)
+    # E.g. "Franklin_resume.pdf" -> "Franklin" (9 points)
+    if filename:
+        clean_fn = re.sub(r'[\d_+\-\.]', ' ', filename).replace('pdf', '').replace('docx', '').replace('doc', '')
+        words = [w for w in clean_fn.split() if len(w) > 2 and w.lower() not in ANTI_NAME_DICT]
+        if words: 
+            add_candidate(" ".join(words[:3]), 9)
+
+    # SOURCE 3: Email Reconstruction (Ultimate Truth -> 10 Points)
     if email:
         prefix = email.split('@')[0].lower()
         parts = re.split(r'[._-]', prefix)
@@ -187,22 +196,15 @@ def extract_name(text: str, filename: str = "", email: str = "") -> str:
             add_candidate(f"{valid_parts[0]} {valid_parts[1]}", 10)
             add_candidate(f"{valid_parts[1]} {valid_parts[0]}", 10) 
         elif len(valid_parts) == 1:
-            add_candidate(valid_parts[0], 5)
-
-    # Source 3: Filename Cleanup
-    if filename:
-        clean_fn = re.sub(r'[\d_+\-\.]', ' ', filename).replace('pdf', '').replace('docx', '').replace('doc', '')
-        words = [w for w in clean_fn.split() if len(w) > 2 and w.lower() not in ANTI_NAME_DICT]
-        if words: 
-            add_candidate(" ".join(words[:2]), 7)
+            add_candidate(valid_parts[0], 6) # Single name gets less points, relies on filename backup
 
     if not candidates:
         return "Unknown"
     
+    # The highest score wins!
     best_match = max(candidates.items(), key=lambda x: x[1])
     return best_match[0]
 
-# 4. FLAWLESS LOCATION ROUTING (Deep Scan preserved perfectly)
 def extract_location(text: str, phone: str = "") -> str:
     scores = {"USA": 0, "India": 0, "UK": 0, "Australia": 0, "Canada": 0}
     search_lower = text[:3000].lower() 
