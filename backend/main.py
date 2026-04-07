@@ -1,10 +1,11 @@
 """
-main.py — Vercel-Compatible Backend API v40.0
-Features: ML Auto-Discovery Initialization, FAISS vector search, Key Skills Filter, Mass Database Management.
+main.py — Vercel-Compatible Backend API v41.0
+Features: Event-Driven ML Triggers, FAISS vector search, Key Skills Filter, Mass Database Management.
 """
 import os
 import zipfile
 import shutil
+import threading # 🎯 NEW: Required for Asynchronous ML Triggers
 from huggingface_hub import hf_hub_download
 
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
@@ -57,14 +58,13 @@ from classifier import classify_resume, extract_skills_regex, extract_all_skills
 from watcher import start_watcher_thread, get_watcher_stats
 from dedup import find_duplicates, remove_duplicates, scan_folder_duplicates
 
-# 🎯 NEW: Import the ML Cron Job
-from model_trainer import start_ml_cron 
+from model_trainer import start_ml_cron, train_ml_model # 🎯 NEW: Imported train_ml_model for manual triggers
 
 init_db()
 start_watcher_thread()
-start_ml_cron() # 🎯 NEW: Ignite the Machine Learning Flywheel
+start_ml_cron() 
 
-app = FastAPI(title="Resume AI Intelligence Platform", version="40.0")
+app = FastAPI(title="Resume AI Intelligence Platform", version="41.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -563,13 +563,24 @@ def live_status():
     try: return {"total_resumes": db.query(Resume).count(), "indexed": resume_index.total, **get_watcher_stats()}
     finally: db.close()
 
+# 🎯 NEW: Event-Driven ML Trigger function
+def trigger_ml_event():
+    # Wait 15 seconds to let the parser extract the raw text from the new resumes
+    time.sleep(15)
+    # Fire the Unsupervised ML pipeline on the newly updated 38K corpus!
+    train_ml_model()
+
 @app.post("/api/upload")
 async def upload_resume(file: UploadFile = File(...)):
     path = os.path.join(RESUME_DIR, file.filename)
     content = await file.read()
     with open(path, "wb") as f: 
         f.write(content)
-    return {"message": "File received. AI is processing in the background.", "data": {"id": 0, "name": file.filename}}
+        
+    # 🎯 NEW: Fire the asynchronous Event-Driven ML Trigger without freezing the user's screen!
+    threading.Thread(target=trigger_ml_event, daemon=True).start()
+    
+    return {"message": "File received. AI is extracting data and ML engine is recalibrating.", "data": {"id": 0, "name": file.filename}}
 
 @app.post("/api/upload-batch")
 async def upload_batch(files: list[UploadFile] = File(...)):
@@ -580,7 +591,11 @@ async def upload_batch(files: list[UploadFile] = File(...)):
         with open(path, "wb") as f: 
             f.write(content)
         saved.append({"name": file.filename})
-    return {"message": f"Successfully received {len(saved)} resumes. Engine is extracting data.", "results": saved}
+        
+    # 🎯 NEW: Fire the asynchronous Event-Driven ML Trigger
+    threading.Thread(target=trigger_ml_event, daemon=True).start()
+    
+    return {"message": f"Successfully received {len(saved)} resumes. Engine extracting data and ML is training.", "results": saved}
 
 @app.post("/api/candidate/{resume_id}/delete")
 def delete_resume(resume_id: int):
