@@ -60,7 +60,8 @@ export const api = {
       body: JSON.stringify(data),
     }),
 
-  matchJD: (data: JDMatchRequest & { location?: string }) =>
+  // 🎯 NEW: Accept key_skills parameter
+  matchJD: (data: JDMatchRequest & { location?: string; key_skills?: string }) =>
     apiFetch<JDMatchResponse>('/api/match-jd', {
       method: 'POST',
       body: JSON.stringify(data),

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { FileText, Sparkles, Loader2, Target, CheckCircle2, XCircle, FileDown, Trophy, Shield, Zap, AlertTriangle, MapPin } from 'lucide-react';
+// 🎯 NEW: Imported "Key" icon for the new UI box
+import { FileText, Sparkles, Loader2, Target, CheckCircle2, XCircle, FileDown, Trophy, Shield, Zap, AlertTriangle, MapPin, Key } from 'lucide-react';
 import CandidateCard from '@/components/CandidateCard';
 import CandidateModal from '@/components/CandidateModal';
 import GlowingCard from '@/components/GlowingCard';
@@ -11,13 +12,13 @@ const SAMPLE_JD = `We are looking for a Senior Full Stack Developer with 5+ year
 
 export default function JDMatchPage() {
   const [jd, setJd] = useState('');
-  const [location, setLocation] = useState(''); // 🎯 NEW: Location State
+  const [location, setLocation] = useState(''); 
+  const [keySkills, setKeySkills] = useState(''); // 🎯 NEW: State for Key Skills
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<JDMatchResponse | null>(null);
   const [error, setError] = useState('');
   const [selectedCandidate, setSelectedCandidate] = useState<Candidate | null>(null);
 
-  // 🎯 SaaS USAGE TRACKER STATE
   const MONTHLY_LIMIT = 100;
   const [usageCount, setUsageCount] = useState(0);
   const isDemo = typeof window !== 'undefined' && !!new URLSearchParams(window.location.search).get('demo');
@@ -26,11 +27,10 @@ export default function JDMatchPage() {
     try { return new Set(JSON.parse(localStorage.getItem('bookmarks') || '[]')); } catch { return new Set(); }
   });
 
-  // 🎯 LOAD USAGE ON MOUNT (Survives login/logout)
   useEffect(() => {
     if (isDemo) {
       const date = new Date();
-      const monthKey = `jd_usage_${date.getFullYear()}_${date.getMonth()}`; // Resets every month automatically!
+      const monthKey = `jd_usage_${date.getFullYear()}_${date.getMonth()}`; 
       const storedUsage = localStorage.getItem(monthKey);
       
       if (storedUsage) {
@@ -67,7 +67,6 @@ export default function JDMatchPage() {
   const handleMatch = async () => {
     if (!jd.trim()) return;
 
-    // 🎯 THE ACTUAL HARD-BLOCK (Protects the API call)
     if (isDemo) {
       const date = new Date();
       const monthKey = `jd_usage_${date.getFullYear()}_${date.getMonth()}`;
@@ -75,7 +74,7 @@ export default function JDMatchPage() {
       
       if (currentUsage >= MONTHLY_LIMIT) {
         setError(`Monthly Limit Reached: You have exhausted your ${MONTHLY_LIMIT} JD matches for this month. Please wait until next month.`);
-        return; // ABSOLUTE STOP: Prevents API from firing
+        return; 
       }
     }
 
@@ -83,10 +82,15 @@ export default function JDMatchPage() {
     setLoading(true);
     setError('');
     try {
-      const data = await api.matchJD({ job_description: jd, top_k: 30, location: location.trim() });
+      // 🎯 NEW: Sending Key Skills to the API payload
+      const data = await api.matchJD({ 
+        job_description: jd, 
+        top_k: 30, 
+        location: location.trim(),
+        key_skills: keySkills.trim()
+      });
       setResult(data);
 
-      // 🎯 INCREMENT USAGE ON SUCCESS
       if (isDemo) {
         const date = new Date();
         const monthKey = `jd_usage_${date.getFullYear()}_${date.getMonth()}`;
@@ -164,7 +168,19 @@ export default function JDMatchPage() {
               />
             </div>
 
-            <div className="flex gap-2 mt-2">
+            {/* 🎯 NEW: The Priority Key Skills Text Box */}
+            <div className="relative mt-2">
+              <Key className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-warning" />
+              <input 
+                type="text" 
+                className="input-glass w-full pl-11 !py-3 text-sm border-warning/30 focus:border-warning/70 transition-colors" 
+                placeholder="Priority Key Skills (e.g. React, AWS) - Optional Strict Match" 
+                value={keySkills} 
+                onChange={(e) => setKeySkills(e.target.value)} 
+              />
+            </div>
+
+            <div className="flex gap-2 mt-4">
               <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
                 onClick={handleMatch} disabled={loading || !jd.trim()} className="btn-primary-glow flex-1">
                 {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <img src="/comp-logo.PNG" className="w-4 h-4 object-contain" alt="Match Logo" />} Analyze & Match
@@ -173,7 +189,6 @@ export default function JDMatchPage() {
                 onClick={() => setJd(SAMPLE_JD)} className="btn-ghost-glow">Sample JD</motion.button>
             </div>
 
-            {/* 🎯 SAAS USAGE TRACKER UI (Only visible in Demo) */}
             {isDemo && (
               <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="mt-6 bg-[#0f172a] p-5 rounded-xl border border-gray-800 shadow-lg">
                 <div className="flex justify-between items-center text-sm text-gray-400 mb-3 font-display font-semibold tracking-wide">

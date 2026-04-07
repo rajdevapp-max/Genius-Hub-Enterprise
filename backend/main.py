@@ -1,6 +1,6 @@
 """
-main.py — Vercel-Compatible Backend API v38.0
-Features: FAISS vector search, STRICT Location Isolation, Mass Database Management APIs.
+main.py — Vercel-Compatible Backend API v39.0
+Features: FAISS vector search, STRICT Location Isolation, Mass Database Management APIs, Strict Key Skills Filter.
 """
 import os
 import zipfile
@@ -60,7 +60,7 @@ from dedup import find_duplicates, remove_duplicates, scan_folder_duplicates
 init_db()
 start_watcher_thread()
 
-app = FastAPI(title="Resume AI Intelligence Platform", version="38.0")
+app = FastAPI(title="Resume AI Intelligence Platform", version="39.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -96,10 +96,12 @@ class SearchRequest(BaseModel):
     require_hackerrank: bool = False
     require_codechef: bool = False
 
+# 🎯 NEW: Added key_skills string to the JD Match Request
 class JDMatchRequest(BaseModel):
     job_description: str
     top_k: int = 100
     location: str = ""
+    key_skills: str = ""
 
 def match_location(req_loc: str, resume_loc: str) -> bool:
     if not req_loc: return True
@@ -373,7 +375,17 @@ def search_resumes(req: SearchRequest):
 @app.post("/api/match-jd")
 def match_jd(req: JDMatchRequest):
     start = time.time()
+    
+    # Extract baseline skills from the unstructured JD
     extracted_reqs = parse_universal_jd(req.job_description)
+    
+    # 🎯 NEW: Process the recruiter's absolute "Must Have" Key Skills
+    user_key_skills = [s.strip().title() for s in req.key_skills.split(',') if s.strip()]
+    for ks in reversed(user_key_skills):
+        if ks in extracted_reqs:
+            extracted_reqs.remove(ks)
+        # Prepend so they get maximum matching weight
+        extracted_reqs.insert(0, ks)
 
     db = SessionLocal()
     candidates = []
@@ -386,14 +398,29 @@ def match_jd(req: JDMatchRequest):
             resume = db.query(Resume).get(rid)
             if not resume: continue 
 
+            # Location strict block
             if req.location and not match_location(req.location, resume.location): 
                 continue
+
+            # 🎯 NEW: Key Skills Strict Hard-Block
+            if user_key_skills:
+                missing_key = False
+                raw_text = (resume.raw_text or "").lower()
+                skills_text = (resume.skills or "").lower()
+                for ks in user_key_skills:
+                    pat = r'\b' + re.escape(ks.lower()) + r'\b'
+                    # If they don't explicitly have this specific key skill, kill the match instantly
+                    if not (re.search(pat, raw_text) or re.search(pat, skills_text)):
+                        missing_key = True
+                        break
+                if missing_key: continue
 
             existing_ids.add(rid)
             d = _resume_to_dict(resume, similarity=r["similarity"], mandatory_skills=extracted_reqs, secondary_skills=[])
             if extracted_reqs and len(d["matched_mandatory"]) == 0: continue
             candidates.append(d)
 
+        # Fallback if FAISS didn't return enough semantic matches
         if len(candidates) < req.top_k and extracted_reqs:
             conditions = []
             for sk in extracted_reqs[:8]: 
@@ -405,6 +432,19 @@ def match_jd(req: JDMatchRequest):
                 for r in fallback:
                     if r.id not in existing_ids:
                         if req.location and not match_location(req.location, r.location): continue
+                        
+                        # 🎯 NEW: Key Skills Strict Hard-Block for Fallback
+                        if user_key_skills:
+                            missing_key = False
+                            raw_text = (r.raw_text or "").lower()
+                            skills_text = (r.skills or "").lower()
+                            for ks in user_key_skills:
+                                pat = r'\b' + re.escape(ks.lower()) + r'\b'
+                                if not (re.search(pat, raw_text) or re.search(pat, skills_text)):
+                                    missing_key = True
+                                    break
+                            if missing_key: continue
+
                         existing_ids.add(r.id)
                         d = _resume_to_dict(r, similarity=0.4, mandatory_skills=extracted_reqs, secondary_skills=[])
                         if len(d["matched_mandatory"]) > 0: candidates.append(d)
@@ -580,9 +620,6 @@ def export_csv(ids: str = Query("")):
         return StreamingResponse(iter([output.getvalue()]), media_type="text/csv", headers={"Content-Disposition": "attachment; filename=candidates_export.csv"})
     finally: db.close()
 
-# ==========================================
-# 🎯 DATABASE MANAGEMENT & MASS DELETION APIs
-# ==========================================
 class DeleteBatchRequest(BaseModel):
     ids: list[int]
 
