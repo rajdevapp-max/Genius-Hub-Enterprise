@@ -258,7 +258,7 @@ export default function SearchPage() {
                   
                   <div className="mb-5">
                     <h3 className="text-xs font-display font-bold text-primary uppercase tracking-widest flex items-center gap-2 mb-4">
-                      <Brain className="w-4 h-4" /> AI Semantic Skills
+                      <Brain className="w-4 h-4" /> GeniusHub SEMANTIC SKILLS
                     </h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
