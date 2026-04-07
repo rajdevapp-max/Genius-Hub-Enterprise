@@ -177,7 +177,7 @@ export default function JDMatchPage() {
             {isDemo && (
               <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="mt-6 bg-[#0f172a] p-5 rounded-xl border border-gray-800 shadow-lg">
                 <div className="flex justify-between items-center text-sm text-gray-400 mb-3 font-display font-semibold tracking-wide">
-                  <span className="flex items-center gap-2"><Target className="w-4 h-4 text-primary" /> DEMO QUOTA</span>
+                  <span className="flex items-center gap-2"><Target className="w-4 h-4 text-primary" /> SEARCH LIMIT</span>
                   <span className={usageCount >= MONTHLY_LIMIT ? "text-destructive" : "text-primary"}>
                     {usageCount} / {MONTHLY_LIMIT} JDs
                   </span>
