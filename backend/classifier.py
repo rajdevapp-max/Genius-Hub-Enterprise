@@ -1,6 +1,6 @@
 """
-classifier.py — Universal Multi-AI NER & Skill Extraction v37.0 (Weighted Hierarchy)
-Features: Flipped Name Voting Hierarchy (Email > Filename > Text) & Expanded Dictionary.
+classifier.py — Universal Multi-AI NER & Skill Extraction v38.0 (ML Integration)
+Features: ML Dynamic Skill Injection, Triangular Name Voting, Flawless Location Logic.
 """
 import os
 import re
@@ -56,6 +56,20 @@ SKILL_PATTERNS = [
     "stripe", "twilio", "auth0", "nginx", "apache", "c", "node", "underscore", "js",
     "ibm mdm", "websphere", "open liberty", "blue prism", "uipath", "automation anywhere", "rpa", "bmc remedy", "servicenow", "snow", "middleware"
 ]
+
+# 🎯 NEW: ML Engine Dynamic Skill Ingestion
+DYNAMIC_SKILLS_FILE = "dynamic_skills.json"
+DYNAMIC_SKILLS = []
+if os.path.exists(DYNAMIC_SKILLS_FILE):
+    try:
+        with open(DYNAMIC_SKILLS_FILE, "r") as f:
+            DYNAMIC_SKILLS = json.load(f)
+            DYNAMIC_SKILLS = [s.lower() for s in DYNAMIC_SKILLS]
+    except:
+        pass
+
+# 🎯 NEW: Unified Dictionary (Human + ML AI)
+ACTIVE_SKILL_PATTERNS = SKILL_PATTERNS + DYNAMIC_SKILLS
 
 ANTI_NAME_DICT = set(SKILL_PATTERNS + [
     "management", "wealth", "project", "server", "application", "system", "database", "developer", 
@@ -119,7 +133,8 @@ def extract_impact_metrics(text: str) -> float:
 def extract_skills_regex(text: str) -> list[str]:
     text_lower = text.lower()
     found = []
-    for skill in SKILL_PATTERNS:
+    # 🎯 NEW: Scans using the Unified Dictionary (Human + ML)
+    for skill in ACTIVE_SKILL_PATTERNS:
         if re.search(r'\b' + re.escape(skill) + r'\b', text_lower):
             found.append(skill.title() if len(skill) > 3 else skill.upper())
     return found
