@@ -1,7 +1,6 @@
 """
-parser.py — Enhanced Resume Parser v17.0 (Layout Preservation Edition)
-Extracts text, hyperlinks, images, fonts, and DEEP PDF/DOCX TABLES.
-Features: Mathematical Layout Preservation for 2-Column Resumes and Skill Grids.
+parser.py — Universal Resume Parser v19.0 (Geometric Engine)
+Features: Mathematical Column/Grid Emulation, Omni-Directional Metadata Injection.
 """
 import os
 import re
@@ -34,33 +33,37 @@ def extract_text_from_pdf(file_path: str) -> dict:
         all_text = []
         MAX_PAGES = 10 
         
-        # 1. ADVANCED TABLE EXTRACTION (Forces Grid Boundaries)
+        # 1. UNIVERSAL GRID REFLOW (Tables & 2-Column Emulation)
         try:
             with pdfplumber.open(file_path) as pdf:
                 for page in pdf.pages[:MAX_PAGES]:
-                    # Extract explicit tables
+                    # Strict Table Extraction
                     tables = page.extract_tables()
                     for table in tables:
                         for row in table:
-                            # Use | to separate cells, \n to separate rows
                             row_text = " | ".join([str(cell).replace('\n', ' ').strip() for cell in row if cell])
                             if row_text: all_text.append(row_text + "\n")
                     
-                    # 2. LAYOUT-PRESERVING EXTRACTION (For 2-column resumes & skill charts)
-                    # This tells the parser to maintain visual spaces so columns don't mash together
+                    # 2-Column Space Emulation: Preserves layout to prevent horizontal mashing
                     layout_text = page.extract_text(layout=True)
                     if layout_text:
-                        # Clean up excessive blank space while maintaining layout breaks
                         cleaned_layout = re.sub(r' {4,}', ' | ', layout_text)
                         all_text.append(cleaned_layout)
         except: pass
 
-        # 3. METADATA & FRAUD DETECTION (PyMuPDF)
+        # 2. OMNI-DIRECTIONAL METADATA HARVESTING
         for page_num in range(min(len(doc), MAX_PAGES)):
             page = doc[page_num]
+            
             for link in page.get_links():
                 uri = link.get("uri", "")
-                if uri and uri.startswith("http"): result["hyperlinks"].append(uri)
+                if uri:
+                    if uri.startswith("http"): 
+                        result["hyperlinks"].append(uri)
+                        all_text.append(f" {uri} ") 
+                    elif uri.startswith("mailto:"):
+                        email_val = uri.replace("mailto:", "").strip()
+                        all_text.append(f" {email_val} ") 
             
             dict_blocks = page.get_text("dict", flags=fitz.TEXT_PRESERVE_WHITESPACE)
             for block in dict_blocks.get("blocks", []):
@@ -80,13 +83,12 @@ def extract_text_from_pdf(file_path: str) -> dict:
                 elif block.get("type") == 1: 
                     result["has_image"] = True
             
-            # 4. OCR FALLBACK FOR IMAGE-BASED PDFs
-            if len(all_text) < 3: # If the PDF was basically empty (flattened image)
+            # 3. UNIVERSAL OCR FALLBACK (For Canva / Image Resumes)
+            if len(all_text) < 3: 
                 for img_info in page.get_images(full=True):
                     try:
                         base_img = doc.extract_image(img_info[0])
                         if base_img and HAS_TESSERACT:
-                            # psm 4 assumes a single column of text of variable sizes (great for resumes)
                             ocr_text = pytesseract.image_to_string(Image.open(io.BytesIO(base_img["image"])), config='--psm 4', timeout=15)
                             if ocr_text.strip(): all_text.append(ocr_text)
                     except Exception as ocr_e:
@@ -101,18 +103,7 @@ def extract_text_from_pdf(file_path: str) -> dict:
         result["fonts"] = serialized_fonts
 
     except Exception as e:
-        print(f"\n[parser] Broken PDF detected ({os.path.basename(file_path)}). Initiating Salvage...")
-        try:
-            with pdfplumber.open(file_path) as pdf:
-                result["page_count"] = len(pdf.pages)
-                extracted_text = []
-                for i, page in enumerate(pdf.pages):
-                    if i >= 10: break 
-                    text = page.extract_text(layout=True)
-                    if text: extracted_text.append(text)
-                result["text"] = "\n".join(extracted_text)
-        except Exception as salvage_e:
-            pass
+        pass
     return result
 
 def extract_text_from_docx(file_path: str) -> dict:
@@ -123,16 +114,14 @@ def extract_text_from_docx(file_path: str) -> dict:
         table_texts = []
         font_set = {}
         
-        # 🎯 EXTREME TABLE RE-FLOW (Ensures Rutul Shah's grid is preserved)
+        # Word Document Table Preservation
         for table in doc.tables:
             for row in table.rows:
                 row_data = []
                 for cell in row.cells:
-                    # Replace newlines inside cells with | to maintain boundary
                     clean_cell = cell.text.strip().replace('\n', ' | ')
                     if clean_cell: row_data.append(clean_cell)
                 if row_data:
-                    # Delimit columns with | and enforce row boundary with \n
                     table_texts.append(" | ".join(row_data) + "\n") 
         
         MAX_PARAGRAPHS = 500
@@ -154,7 +143,12 @@ def extract_text_from_docx(file_path: str) -> dict:
                     rid = elem.get("{http://schemas.openxmlformats.org/officeDocument/2006/relationships}id")
                     if rid and rid in doc.part.rels:
                         url = doc.part.rels[rid].target_ref
-                        if url and url.startswith("http"): result["hyperlinks"].append(url)
+                        if url and url.startswith("http"): 
+                            result["hyperlinks"].append(url)
+                            texts.append(f" {url} ") 
+                        elif url and url.startswith("mailto:"):
+                            email_val = url.replace("mailto:", "").strip()
+                            texts.append(f" {email_val} ")
         
         for rel in doc.part.rels.values():
             if "image" in rel.reltype: result["has_image"] = True; break
@@ -171,7 +165,6 @@ def extract_text_from_image(file_path: str) -> dict:
     result = {"text": "", "hyperlinks": [], "fonts": {}, "has_image": True, "page_count": 1, "fraud_flag": 0, "fraud_reason": ""}
     if not HAS_TESSERACT: return result
     try:
-        # psm 4 is the best OCR setting for variable column layouts (resumes)
         result["text"] = pytesseract.image_to_string(Image.open(file_path), config='--psm 4', timeout=20).strip()
     except Exception as e: 
         pass
@@ -184,7 +177,7 @@ def extract_full(file_path: str) -> dict:
     elif ext in (".png", ".jpg", ".jpeg", ".tiff", ".bmp"): data = extract_text_from_image(file_path)
     else: return {"text": "", "hyperlinks": [], "fonts": {}, "has_image": False, "page_count": 0, "fraud_flag": 0, "fraud_reason": ""}
     
-    url_pattern = r'https?://[^\s<>"{}|\\^`\[\]]+'
+    url_pattern = r'(?:https?://|www\.)[^\s<>"{}|\\^`\[\]]+'
     data["hyperlinks"] = list(set(data.get("hyperlinks", []) + re.findall(url_pattern, data["text"])))
     data["file_hash"] = file_hash(file_path)
     data["word_count"] = len(data["text"].split())
