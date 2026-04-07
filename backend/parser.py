@@ -33,25 +33,21 @@ def extract_text_from_pdf(file_path: str) -> dict:
         all_text = []
         MAX_PAGES = 10 
         
-        # 1. UNIVERSAL GRID REFLOW (Tables & 2-Column Emulation)
         try:
             with pdfplumber.open(file_path) as pdf:
                 for page in pdf.pages[:MAX_PAGES]:
-                    # Strict Table Extraction
                     tables = page.extract_tables()
                     for table in tables:
                         for row in table:
                             row_text = " | ".join([str(cell).replace('\n', ' ').strip() for cell in row if cell])
                             if row_text: all_text.append(row_text + "\n")
                     
-                    # 2-Column Space Emulation: Preserves layout to prevent horizontal mashing
                     layout_text = page.extract_text(layout=True)
                     if layout_text:
                         cleaned_layout = re.sub(r' {4,}', ' | ', layout_text)
                         all_text.append(cleaned_layout)
         except: pass
 
-        # 2. OMNI-DIRECTIONAL METADATA HARVESTING
         for page_num in range(min(len(doc), MAX_PAGES)):
             page = doc[page_num]
             
@@ -83,7 +79,6 @@ def extract_text_from_pdf(file_path: str) -> dict:
                 elif block.get("type") == 1: 
                     result["has_image"] = True
             
-            # 3. UNIVERSAL OCR FALLBACK (For Canva / Image Resumes)
             if len(all_text) < 3: 
                 for img_info in page.get_images(full=True):
                     try:
@@ -114,7 +109,6 @@ def extract_text_from_docx(file_path: str) -> dict:
         table_texts = []
         font_set = {}
         
-        # Word Document Table Preservation
         for table in doc.tables:
             for row in table.rows:
                 row_data = []

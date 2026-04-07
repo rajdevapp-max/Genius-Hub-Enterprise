@@ -1,6 +1,6 @@
 """
-main.py — Vercel-Compatible Backend API v33.0
-Features: Multi-threading extractor, FAISS vector search, STRICT Location Isolation.
+main.py — Vercel-Compatible Backend API v38.0
+Features: FAISS vector search, STRICT Location Isolation, Mass Database Management APIs.
 """
 import os
 import zipfile
@@ -60,7 +60,7 @@ from dedup import find_duplicates, remove_duplicates, scan_folder_duplicates
 init_db()
 start_watcher_thread()
 
-app = FastAPI(title="Resume AI Intelligence Platform", version="33.0")
+app = FastAPI(title="Resume AI Intelligence Platform", version="38.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -101,11 +101,9 @@ class JDMatchRequest(BaseModel):
     top_k: int = 100
     location: str = ""
 
-# 🎯 THE FIX: Completely removed `raw_text` from location matching. 
-# It will now ONLY match if the candidate's exact extracted location tag matches your search.
 def match_location(req_loc: str, resume_loc: str) -> bool:
     if not req_loc: return True
-    if not resume_loc: return False # If strict location is required, reject candidates with no location
+    if not resume_loc: return False 
     
     req_loc = req_loc.lower().strip()
     res_loc = resume_loc.lower()
@@ -320,7 +318,6 @@ def search_resumes(req: SearchRequest):
             resume = db.query(Resume).get(rid)
             if not resume: continue
 
-            # 🎯 AI SEARCH: Only allows strict matches to the extracted Location string! No more raw_text false positives.
             if detected_location and not match_location(detected_location, resume.location): continue
 
             raw_text = (resume.raw_text or "").lower()
@@ -389,22 +386,12 @@ def match_jd(req: JDMatchRequest):
             resume = db.query(Resume).get(rid)
             if not resume: continue 
 
-            # 🎯 JD MATCH: Exact same strict filtering. Raw_text is totally removed from the equation.
             if req.location and not match_location(req.location, resume.location): 
                 continue
 
             existing_ids.add(rid)
-            
-            d = _resume_to_dict(
-                resume, 
-                similarity=r["similarity"], 
-                mandatory_skills=extracted_reqs, 
-                secondary_skills=[]
-            )
-            
-            if extracted_reqs and len(d["matched_mandatory"]) == 0:
-                continue
-                
+            d = _resume_to_dict(resume, similarity=r["similarity"], mandatory_skills=extracted_reqs, secondary_skills=[])
+            if extracted_reqs and len(d["matched_mandatory"]) == 0: continue
             candidates.append(d)
 
         if len(candidates) < req.top_k and extracted_reqs:
@@ -419,14 +406,8 @@ def match_jd(req: JDMatchRequest):
                     if r.id not in existing_ids:
                         if req.location and not match_location(req.location, r.location): continue
                         existing_ids.add(r.id)
-                        d = _resume_to_dict(
-                            r, 
-                            similarity=0.4, 
-                            mandatory_skills=extracted_reqs, 
-                            secondary_skills=[]
-                        )
-                        if len(d["matched_mandatory"]) > 0:
-                            candidates.append(d)
+                        d = _resume_to_dict(r, similarity=0.4, mandatory_skills=extracted_reqs, secondary_skills=[])
+                        if len(d["matched_mandatory"]) > 0: candidates.append(d)
 
         candidates.sort(key=lambda x: (len(x["matched_mandatory"]), x["score"]), reverse=True)
         candidates = candidates[:req.top_k]
@@ -437,12 +418,7 @@ def match_jd(req: JDMatchRequest):
     finally:
         db.close()
 
-    return {
-        "candidates": candidates, 
-        "required_skills": extracted_reqs, 
-        "total_resumes": resume_index.total, 
-        "total_time": time.time() - start
-    }
+    return {"candidates": candidates, "required_skills": extracted_reqs, "total_resumes": resume_index.total, "total_time": time.time() - start}
 
 @app.get("/api/duplicates")
 def get_duplicates(): return {"db_duplicates": find_duplicates(), "folder_duplicates": scan_folder_duplicates(), "total_duplicate_groups": len(find_duplicates()), "total_duplicate_files": sum(d["count"] - 1 for d in find_duplicates())}
@@ -578,19 +554,15 @@ def delete_resume(resume_id: int):
     try:
         resume = db.query(Resume).get(resume_id)
         if not resume: raise HTTPException(404, "Resume not found")
-        
         file_path = os.path.join(RESUME_DIR, resume.filename)
         if os.path.exists(file_path):
             try: os.remove(file_path)
             except: pass 
-            
         db.delete(resume)
         db.commit()
-        
         if hasattr(resume_index, 'remove'):
             try: resume_index.remove(resume_id)
             except: pass
-            
         return {"message": "Successfully deleted profile", "id": resume_id}
     finally: db.close()
 
@@ -606,6 +578,45 @@ def export_csv(ids: str = Query("")):
             writer.writerow([rank, r.name, r.email, r.phone, r.location, r.experience_years, "; ".join(json.loads(r.skills) if r.skills else []), round(r.score)])
         output.seek(0)
         return StreamingResponse(iter([output.getvalue()]), media_type="text/csv", headers={"Content-Disposition": "attachment; filename=candidates_export.csv"})
+    finally: db.close()
+
+# ==========================================
+# 🎯 DATABASE MANAGEMENT & MASS DELETION APIs
+# ==========================================
+class DeleteBatchRequest(BaseModel):
+    ids: list[int]
+
+@app.post("/api/candidates/delete-batch")
+def delete_batch(req: DeleteBatchRequest):
+    db = SessionLocal()
+    try:
+        resumes = db.query(Resume).filter(Resume.id.in_(req.ids)).all()
+        for r in resumes:
+            file_path = os.path.join(RESUME_DIR, r.filename)
+            if os.path.exists(file_path):
+                try: os.remove(file_path)
+                except: pass
+            db.delete(r)
+            if hasattr(resume_index, 'remove'):
+                try: resume_index.remove(r.id)
+                except: pass
+        db.commit()
+        return {"message": f"Successfully deleted {len(resumes)} profiles."}
+    finally: db.close()
+
+@app.post("/api/candidates/delete-all")
+def delete_all():
+    db = SessionLocal()
+    try:
+        resumes = db.query(Resume).all()
+        for r in resumes:
+            file_path = os.path.join(RESUME_DIR, r.filename)
+            if os.path.exists(file_path):
+                try: os.remove(file_path)
+                except: pass
+        db.query(Resume).delete()
+        db.commit()
+        return {"message": "NUCLEAR WIPE COMPLETE. Database is now empty."}
     finally: db.close()
 
 @app.get("/")

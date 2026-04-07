@@ -113,12 +113,27 @@ export const api = {
     return res.json();
   },
 
-  // 🎯 THE FIX: Send a POST request to bypass strict cloud proxy firewalls!
   deleteCandidate: (id: number) =>
     apiFetch<{ message: string }>(`/api/candidate/${id}/delete`, { method: 'POST' }),
 
   deleteResume: (id: number) =>
     apiFetch<{ message: string }>(`/api/candidate/${id}/delete`, { method: 'POST' }),
+
+  deleteBatchResumes: async (ids: number[]) => {
+    const res = await fetch(`${API_URL}/api/candidates/delete-batch`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids })
+    });
+    if (!res.ok) throw new Error('Failed to delete batch');
+    return res.json();
+  },
+
+  deleteAllResumes: async () => {
+    const res = await fetch(`${API_URL}/api/candidates/delete-all`, { method: 'POST' });
+    if (!res.ok) throw new Error('Failed to wipe database');
+    return res.json();
+  },
 
   exportCSV: (ids?: number[]) =>
     `${API_URL}/api/export${ids?.length ? `?ids=${ids.join(',')}` : ''}`,
