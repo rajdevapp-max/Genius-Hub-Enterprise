@@ -12,21 +12,21 @@ import JDMatchPage from "@/pages/JDMatchPage";
 import AnalyticsPage from "@/pages/AnalyticsPage";
 import UploadPage from "@/pages/UploadPage";
 import LoginPage from "@/pages/LoginPage";
+import DatabasePage from "@/pages/DatabasePage"; // 🎯 ADDED: Database Import
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
 
 // --- THE SMART LOCK SECURITY WRAPPER ---
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
-  // 🎯 THE FIX: We check the URL for your specific "?demo=demo-BATS" secret key!
+  // We check the URL for your specific "?demo=demo-BATS" secret key!
   const isDemoSite = window.location.search.includes("demo=demo-BATS");
   const isAuthenticated = sessionStorage.getItem('bats_demo_auth') === 'true';
   
   // Only lock them out if the link has "?demo=demo-BATS" AND they aren't logged in.
-  // Your original link (without ?demo=demo-BATS) completely ignores this and stays open!
   if (isDemoSite && !isAuthenticated) {
-    // Keep the demo tag in the URL so it doesn't get lost when sending them to login
-    return <Navigate to="/login?demo=demo-BATS" replace />;
+    // 🎯 SECURITY FIX: Safely preserves the demo tag when redirecting to login
+    return <Navigate to={`/login${window.location.search}`} replace />;
   }
   
   return <>{children}</>;
@@ -50,6 +50,10 @@ const App = () => (
                   <Route path="/jd-match" element={<JDMatchPage />} />
                   <Route path="/analytics" element={<AnalyticsPage />} />
                   <Route path="/upload" element={<UploadPage />} />
+                  
+                  {/* 🎯 ADDED: Database Route (Fixes the 404!) */}
+                  <Route path="/database" element={<DatabasePage />} />
+                  
                   <Route path="*" element={<NotFound />} />
                 </Routes>
               </Layout>
