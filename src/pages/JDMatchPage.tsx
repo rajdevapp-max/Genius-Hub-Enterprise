@@ -226,9 +226,25 @@ export default function JDMatchPage() {
                     </button>
                   </div>
                   <div className="flex flex-wrap gap-1.5 mb-4">
-                    {result.required_skills?.map((s: string, i: number) => (
-                      <motion.span key={s} initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ delay: i * 0.03 }} className="skill-tag border border-success text-success bg-success/10">{s}</motion.span>
-                    ))}
+                    {/* 🎯 THE FIX: Adds a star icon and special styling for user-defined priority skills! */}
+                    {result.required_skills?.map((s: string, i: number) => {
+                      const isPriority = keySkills.split(',').map(k => k.trim().toLowerCase()).includes(s.toLowerCase());
+                      return (
+                        <motion.span 
+                          key={s} 
+                          initial={{ scale: 0 }} 
+                          animate={{ scale: 1 }} 
+                          transition={{ delay: i * 0.03 }} 
+                          className={`skill-tag border ${
+                            isPriority 
+                              ? 'border-primary text-primary bg-primary/20 font-bold shadow-[0_0_10px_rgba(var(--primary-rgb),0.3)]' 
+                              : 'border-success text-success bg-success/10'
+                          }`}
+                        >
+                          {isPriority ? `★ ${s}` : s}
+                        </motion.span>
+                      );
+                    })}
                   </div>
                   <div className="flex items-center gap-4 text-[10px] font-mono text-muted-foreground">
                     <span className="flex items-center gap-1"><Shield className="w-3 h-3" /> Strict Filter Applied</span>
@@ -272,7 +288,6 @@ export default function JDMatchPage() {
                   </GlowingCard>
                 )}
 
-                {/* 🎯 NEW: The Empty State UI so it doesn't look frozen! */}
                 {result.candidates.length === 0 && (
                   <GlowingCard className="p-10 text-center mt-4">
                     <AlertTriangle className="w-10 h-10 text-warning/50 mx-auto mb-3" />
