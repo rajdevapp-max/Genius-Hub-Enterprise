@@ -10,7 +10,7 @@ const escapeRegExp = (string: string) => {
   return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 };
 
-export default function CandidateCard({ candidate, rank, bookmarked, blindMode = false, onBookmark, onViewDetail, onDelete }: any) {
+export default function CandidateCard({ candidate, rank, bookmarked, blindMode = false, keySkills = '', onBookmark, onViewDetail, onDelete }: any) {
   const certs = candidate.certificates || [];
   const links = candidate.hyperlinks || [];
   const isNameMatch = candidate.match_type === 'name';
@@ -25,6 +25,25 @@ export default function CandidateCard({ candidate, rank, bookmarked, blindMode =
     if (rank === 2) return 'rank-silver';
     if (rank === 3) return 'rank-bronze';
     return 'bg-secondary text-muted-foreground';
+  };
+
+  // 🎯 FIX: Logic to highlight only the specific priority skills this candidate possesses
+  const prioritySkillsList = (keySkills || '').split(',').map((k: string) => k.trim().toLowerCase()).filter(Boolean);
+
+  const renderSkill = (s: string, defaultClass: string, keyPrefix: string) => {
+    const isPriority = prioritySkillsList.includes(s.toLowerCase());
+    if (isPriority) {
+      return (
+        <span key={`${keyPrefix}-${s}`} className="skill-tag border border-primary text-primary bg-primary/20 font-bold shadow-[0_0_10px_rgba(var(--primary-rgb),0.3)]">
+          ★ {s}
+        </span>
+      );
+    }
+    return (
+      <span key={`${keyPrefix}-${s}`} className={`skill-tag border ${defaultClass}`}>
+        {s}
+      </span>
+    );
   };
 
   return (
@@ -133,9 +152,9 @@ export default function CandidateCard({ candidate, rank, bookmarked, blindMode =
           </div>
 
           <div className="flex flex-wrap gap-1 mb-1.5">
-            {/* 🎯 THE FIX: Updated Colors! Mandatory = Green, Secondary = Yellow, Extracted = Green */}
-            {(candidate.matched_mandatory || []).map((s: string) => <span key={`m-${s}`} className="skill-tag border border-success text-success bg-success/10">{s}</span>)}
-            {(candidate.matched_secondary || candidate.matched_skills || []).slice(0, 5).map((s: string) => <span key={`s-${s}`} className="skill-tag border border-warning text-warning bg-warning/10">{s}</span>)}
+            {/* 🎯 FIX: Use the new renderSkill function to highlight priorities */}
+            {(candidate.matched_mandatory || []).map((s: string) => renderSkill(s, 'border-success text-success bg-success/10', 'm'))}
+            {(candidate.matched_secondary || candidate.matched_skills || []).slice(0, 5).map((s: string) => renderSkill(s, 'border-warning text-warning bg-warning/10', 's'))}
             {(candidate.missing_mandatory || candidate.missing_skills || []).slice(0, 3).map((s: string) => <span key={`x-${s}`} className="skill-tag-missing">{s}</span>)}
             {(candidate.skills || [])
               .filter((s: string) => 
@@ -143,7 +162,7 @@ export default function CandidateCard({ candidate, rank, bookmarked, blindMode =
                 !(candidate.matched_secondary || candidate.matched_skills || []).includes(s) && 
                 !(candidate.missing_mandatory || candidate.missing_skills || []).includes(s)
               )
-              .slice(0, 4).map((s: string) => <span key={`o-${s}`} className="skill-tag border border-success text-success bg-success/10">{s}</span>)}
+              .slice(0, 4).map((s: string) => renderSkill(s, 'border-success text-success bg-success/10', 'o'))}
           </div>
 
           {candidate.context_snippets && candidate.context_snippets.length > 0 && (

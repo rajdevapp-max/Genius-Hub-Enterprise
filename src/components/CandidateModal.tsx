@@ -8,7 +8,7 @@ import {
 import ATSScoreRing from './ATSScoreRing';
 import { api } from '@/lib/api';
 
-export default function CandidateModal({ candidate, onClose, onDelete }: any) {
+export default function CandidateModal({ candidate, keySkills = '', onClose, onDelete }: any) {
   const [tab, setTab] = useState('profile');
   const [previewText, setPreviewText] = useState('');
   const [loadingPreview, setLoadingPreview] = useState(false);
@@ -54,6 +54,25 @@ export default function CandidateModal({ candidate, onClose, onDelete }: any) {
     if (url.includes('leetcode.com')) return <Code2 className="w-4 h-4 text-warning" />;
     if (url.includes('hackerrank.com')) return <Terminal className="w-4 h-4 text-success" />;
     return <ExternalLink className="w-4 h-4" />;
+  };
+
+  // 🎯 FIX: Logic for the popup modal to highlight Priority Skills
+  const prioritySkillsList = (keySkills || '').split(',').map((k: string) => k.trim().toLowerCase()).filter(Boolean);
+
+  const renderSkill = (s: string, defaultClass: string, keyPrefix: string) => {
+    const isPriority = prioritySkillsList.includes(s.toLowerCase());
+    if (isPriority) {
+      return (
+        <span key={`${keyPrefix}-${s}`} className="skill-tag border border-primary text-primary bg-primary/20 font-bold shadow-[0_0_10px_rgba(var(--primary-rgb),0.3)]">
+          ★ {s}
+        </span>
+      );
+    }
+    return (
+      <span key={`${keyPrefix}-${s}`} className={`skill-tag border ${defaultClass}`}>
+        {s}
+      </span>
+    );
   };
 
   return (
@@ -240,22 +259,22 @@ export default function CandidateModal({ candidate, onClose, onDelete }: any) {
                     </h3>
                     
                     <div className="space-y-3">
-                      {/* 🎯 THE FIX: Green for Mandatory */}
+                      {/* 🎯 FIX: Green for Mandatory, Star for Priority */}
                       {(candidate.matched_mandatory?.length || 0) > 0 && (
                         <div>
                           <p className="text-[10px] text-muted-foreground mb-1 uppercase tracking-wider">Mandatory Matches</p>
                           <div className="flex flex-wrap gap-1.5">
-                            {candidate.matched_mandatory?.map((s: any) => <span key={`m-${s}`} className="skill-tag border border-success text-success bg-success/10">{s}</span>)}
+                            {candidate.matched_mandatory?.map((s: any) => renderSkill(s, 'border-success text-success bg-success/10', 'm'))}
                           </div>
                         </div>
                       )}
                       
-                      {/* 🎯 THE FIX: Yellow for Secondary */}
+                      {/* 🎯 FIX: Yellow for Secondary, Star for Priority */}
                       {((candidate.matched_secondary?.length || 0) > 0 || (candidate.matched_skills?.length || 0) > 0) && (
                         <div>
                           <p className="text-[10px] text-muted-foreground mb-1 uppercase tracking-wider">Secondary/Semantic Matches</p>
                           <div className="flex flex-wrap gap-1.5">
-                            {(candidate.matched_secondary || candidate.matched_skills || []).map((s: any) => <span key={`s-${s}`} className="skill-tag border border-warning text-warning bg-warning/10">{s}</span>)}
+                            {(candidate.matched_secondary || candidate.matched_skills || []).map((s: any) => renderSkill(s, 'border-warning text-warning bg-warning/10', 's'))}
                           </div>
                         </div>
                       )}
@@ -270,7 +289,7 @@ export default function CandidateModal({ candidate, onClose, onDelete }: any) {
                         </div>
                       )}
 
-                      {/* 🎯 THE FIX: Green for Other Extracted Skills */}
+                      {/* 🎯 FIX: Green for Other, Star for Priority */}
                       <div>
                         <p className="text-[10px] text-muted-foreground mb-1 uppercase tracking-wider">Other Extracted Skills & Ontology</p>
                         <div className="flex flex-wrap gap-1.5">
@@ -280,7 +299,7 @@ export default function CandidateModal({ candidate, onClose, onDelete }: any) {
                               !(candidate.matched_secondary || candidate.matched_skills || []).includes(s) && 
                               !(candidate.missing_mandatory || candidate.missing_skills || []).includes(s)
                             )
-                            .map((s: any) => <span key={`o-${s}`} className="skill-tag border border-success text-success bg-success/10">{s}</span>)}
+                            .map((s: any) => renderSkill(s, 'border-success text-success bg-success/10', 'o'))}
                         </div>
                       </div>
                     </div>

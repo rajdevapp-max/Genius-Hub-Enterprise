@@ -386,6 +386,7 @@ export default function JDMatchPage() {
                   candidate={c} 
                   rank={i + 1} 
                   bookmarked={bookmarks.has(c.id)}
+                  keySkills={keySkills} /* 🎯 FIX: Passing Priority Skills to the Card */
                   onBookmark={() => toggleBookmark(c.id)}
                   onViewDetail={() => setSelectedCandidate(c)} 
                   onDelete={handleDelete} 
@@ -398,6 +399,7 @@ export default function JDMatchPage() {
 
       <CandidateModal
         candidate={selectedCandidate}
+        keySkills={keySkills} /* 🎯 FIX: Passing Priority Skills to the Modal */
         onClose={() => setSelectedCandidate(null)}
         onDelete={handleDelete} 
       />
