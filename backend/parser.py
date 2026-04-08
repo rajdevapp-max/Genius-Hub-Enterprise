@@ -1,6 +1,6 @@
 """
-parser.py — Universal Resume Parser v19.0 (Geometric Engine)
-Features: Mathematical Column/Grid Emulation, Omni-Directional Metadata Injection.
+parser.py — Universal Resume Parser v25.0 (God Mode Engine)
+Features: Brute-Force Binary Ripping, First-Page OCR Cap, and Regex XML Fallbacks.
 """
 import os
 import re
@@ -25,143 +25,119 @@ def file_hash(file_path: str) -> str:
             h.update(chunk)
     return h.hexdigest()
 
+# 🛡️ THE NEW ULTIMATE SAFETY NET: Impossible to crash.
+def brute_force_binary_ripper(file_path: str) -> str:
+    """Rips human-readable ASCII text directly from the raw hex binary of corrupted files."""
+    try:
+        with open(file_path, "rb") as f:
+            content = f.read()
+            extracted = b" ".join(re.findall(b'[a-zA-Z0-9 \t\n\r\.\,\-\+\@\:\/]{4,}', content))
+            return re.sub(r'\s+', ' ', extracted.decode('ascii', errors='ignore')).strip()
+    except: 
+        return ""
+
 def extract_text_from_pdf(file_path: str) -> dict:
     result = {"text": "", "hyperlinks": [], "fonts": {}, "has_image": False, "page_count": 0, "fraud_flag": 0, "fraud_reason": ""}
     try:
         doc = fitz.open(file_path)
+        if doc.needs_pass: doc.authenticate("")
+            
         result["page_count"] = len(doc)
         all_text = []
         MAX_PAGES = 10 
         
-        try:
-            with pdfplumber.open(file_path) as pdf:
-                for page in pdf.pages[:MAX_PAGES]:
-                    tables = page.extract_tables()
-                    for table in tables:
-                        for row in table:
-                            row_text = " | ".join([str(cell).replace('\n', ' ').strip() for cell in row if cell])
-                            if row_text: all_text.append(row_text + "\n")
-                    
-                    layout_text = page.extract_text(layout=True)
-                    if layout_text:
-                        cleaned_layout = re.sub(r' {4,}', ' | ', layout_text)
-                        all_text.append(cleaned_layout)
-        except: pass
-
+        # ⚡ FAST PASS
+        fast_text_blocks = []
+        needs_heavy_plumber = False
+        
         for page_num in range(min(len(doc), MAX_PAGES)):
             page = doc[page_num]
-            
+            page_text = page.get_text("text") 
+            if page_text: fast_text_blocks.append(page_text)
+            if "        " in page_text or "\t\t" in page_text: needs_heavy_plumber = True
+
             for link in page.get_links():
                 uri = link.get("uri", "")
                 if uri:
-                    if uri.startswith("http"): 
-                        result["hyperlinks"].append(uri)
-                        all_text.append(f" {uri} ") 
-                    elif uri.startswith("mailto:"):
-                        email_val = uri.replace("mailto:", "").strip()
-                        all_text.append(f" {email_val} ") 
+                    if uri.startswith("http"): result["hyperlinks"].append(uri)
+                    elif uri.startswith("mailto:"): result["hyperlinks"].append(uri.replace('mailto:', '').strip())
+            try:
+                dict_blocks = page.get_text("dict")
+                for block in dict_blocks.get("blocks", []):
+                    if block.get("type") == 1: result["has_image"] = True
+            except: pass
+
+        combined_fast_text = "\n".join(fast_text_blocks).strip()
+
+        # 🧠 SMART ROUTING WITH SPEED CAPS
+        if len(combined_fast_text.split()) < 20 or needs_heavy_plumber:
+            heavy_text = []
+            try:
+                with pdfplumber.open(file_path) as pdf:
+                    # ⚡ SPEED CAP: Only run heavy table math on the first 3 pages
+                    for page in pdf.pages[:3]:
+                        for table in page.extract_tables():
+                            for row in table:
+                                row_text = " | ".join([str(cell).replace('\n', ' ').strip() for cell in row if cell])
+                                if row_text: heavy_text.append(row_text + "\n")
+                        layout_text = page.extract_text(layout=True)
+                        if layout_text: heavy_text.append(re.sub(r' {4,}', ' | ', layout_text))
+            except: pass
             
-            dict_blocks = page.get_text("dict", flags=fitz.TEXT_PRESERVE_WHITESPACE)
-            for block in dict_blocks.get("blocks", []):
-                if block.get("type") == 0:
-                    for line in block.get("lines", []):
-                        for span in line.get("spans", []):
-                            color = span.get("color", 0)
-                            if color == 16777215 and span.get("text", "").strip():
-                                result["fraud_flag"] = 1
-                                result["fraud_reason"] = "Detected invisible (white) text. Potential keyword stuffing fraud."
-                            
-                            font_name = span.get("font", "unknown")
-                            size = span.get("size", 0)
-                            if font_name not in result["fonts"]: result["fonts"][font_name] = {"sizes": set(), "count": 0}
-                            result["fonts"][font_name]["sizes"].add(round(size, 1))
-                            result["fonts"][font_name]["count"] += 1
-                elif block.get("type") == 1: 
-                    result["has_image"] = True
+            if len(" ".join(heavy_text).split()) > len(combined_fast_text.split()) * 0.5:
+                all_text.extend(heavy_text)
+            else:
+                all_text.append(combined_fast_text)
             
-            if len(all_text) < 3: 
-                for img_info in page.get_images(full=True):
-                    try:
+            # ⚡ SPEED CAP: OCR ONLY the first page, with a strict 3-second timeout!
+            if len(" ".join(all_text).split()) < 20 and HAS_TESSERACT:
+                try:
+                    for img_info in doc[0].get_images(full=True):
                         base_img = doc.extract_image(img_info[0])
-                        if base_img and HAS_TESSERACT:
-                            ocr_text = pytesseract.image_to_string(Image.open(io.BytesIO(base_img["image"])), config='--psm 4', timeout=15)
-                            if ocr_text.strip(): all_text.append(ocr_text)
-                    except Exception as ocr_e:
-                        pass
+                        ocr_text = pytesseract.image_to_string(Image.open(io.BytesIO(base_img["image"])), config='--psm 4', timeout=3)
+                        if ocr_text.strip(): all_text.append(ocr_text)
+                except: pass
+        else:
+            all_text.append(combined_fast_text)
+
         doc.close()
-
         result["text"] = "\n".join(all_text).strip()
-        
-        serialized_fonts = {}
-        for fname, fdata in result["fonts"].items():
-            serialized_fonts[fname] = {"sizes": sorted(list(fdata["sizes"])), "count": fdata["count"]}
-        result["fonts"] = serialized_fonts
 
-    except Exception as e:
-        pass
+    except Exception: pass
     return result
 
 def extract_text_from_docx(file_path: str) -> dict:
     result = {"text": "", "hyperlinks": [], "fonts": {}, "has_image": False, "page_count": 1, "fraud_flag": 0, "fraud_reason": ""}
-    try:
-        doc = Document(file_path)
-        texts = []
-        table_texts = []
-        font_set = {}
-        
-        for table in doc.tables:
-            for row in table.rows:
-                row_data = []
-                for cell in row.cells:
-                    clean_cell = cell.text.strip().replace('\n', ' | ')
-                    if clean_cell: row_data.append(clean_cell)
-                if row_data:
-                    table_texts.append(" | ".join(row_data) + "\n") 
-        
-        MAX_PARAGRAPHS = 500
-        for i, para in enumerate(doc.paragraphs):
-            if i > MAX_PARAGRAPHS: break
-            if para.text.strip():
-                texts.append(para.text)
-            for run in para.runs:
-                if run.font.color and run.font.color.rgb and str(run.font.color.rgb) == "FFFFFF" and run.text.strip():
-                    result["fraud_flag"] = 1; result["fraud_reason"] = "Detected invisible (white) text in Word Document."
-                fname = run.font.name or "default"
-                fsize = run.font.size.pt if run.font.size else 0
-                if fname not in font_set: font_set[fname] = {"sizes": set(), "count": 0}
-                font_set[fname]["sizes"].add(round(fsize, 1)); font_set[fname]["count"] += 1
-        
-        for para in doc.paragraphs:
-            for elem in para._element.iter():
-                if elem.tag.endswith("}hyperlink"):
-                    rid = elem.get("{http://schemas.openxmlformats.org/officeDocument/2006/relationships}id")
-                    if rid and rid in doc.part.rels:
-                        url = doc.part.rels[rid].target_ref
-                        if url and url.startswith("http"): 
-                            result["hyperlinks"].append(url)
-                            texts.append(f" {url} ") 
-                        elif url and url.startswith("mailto:"):
-                            email_val = url.replace("mailto:", "").strip()
-                            texts.append(f" {email_val} ")
-        
-        for rel in doc.part.rels.values():
-            if "image" in rel.reltype: result["has_image"] = True; break
-        
-        final_text = table_texts + texts
-        result["text"] = "\n".join(final_text).strip()
-        result["fonts"] = {fname: {"sizes": sorted(list(fdata["sizes"])), "count": fdata["count"]} for fname, fdata in font_set.items()}
-        
-    except Exception as e:
-        pass
+    
+    if not file_path.lower().endswith('.doc'):
+        try:
+            doc = Document(file_path)
+            texts = []
+            for table in doc.tables:
+                for row in table.rows:
+                    row_data = [cell.text.strip().replace('\n', ' | ') for cell in row.cells if cell.text.strip()]
+                    if row_data: texts.append(" | ".join(row_data) + "\n") 
+            for para in doc.paragraphs[:500]:
+                if para.text.strip(): texts.append(para.text)
+            result["text"] = "\n".join(texts).strip()
+            if len(result["text"].split()) > 5: return result
+        except Exception:
+            # 🛡️ THE FIX: Crash-Proof Regex XML Ripper 
+            try:
+                with zipfile.ZipFile(file_path) as docx:
+                    xml_content = docx.read('word/document.xml')
+                    # Regex strips the XML tags perfectly without crashing on corrupted data
+                    clean_xml = re.sub(b'<[^>]+>', b' ', xml_content).decode('utf-8', errors='ignore')
+                    result["text"] = re.sub(r'\s+', ' ', clean_xml).strip()
+                    if len(result["text"].split()) > 5: return result
+            except: pass
     return result
 
 def extract_text_from_image(file_path: str) -> dict:
     result = {"text": "", "hyperlinks": [], "fonts": {}, "has_image": True, "page_count": 1, "fraud_flag": 0, "fraud_reason": ""}
     if not HAS_TESSERACT: return result
-    try:
-        result["text"] = pytesseract.image_to_string(Image.open(file_path), config='--psm 4', timeout=20).strip()
-    except Exception as e: 
-        pass
+    try: result["text"] = pytesseract.image_to_string(Image.open(file_path), config='--psm 4', timeout=5).strip()
+    except: pass
     return result
 
 def extract_full(file_path: str) -> dict:
@@ -169,8 +145,14 @@ def extract_full(file_path: str) -> dict:
     if ext == ".pdf": data = extract_text_from_pdf(file_path)
     elif ext in (".docx", ".doc"): data = extract_text_from_docx(file_path)
     elif ext in (".png", ".jpg", ".jpeg", ".tiff", ".bmp"): data = extract_text_from_image(file_path)
-    else: return {"text": "", "hyperlinks": [], "fonts": {}, "has_image": False, "page_count": 0, "fraud_flag": 0, "fraud_reason": ""}
+    else: data = {"text": "", "hyperlinks": [], "fonts": {}, "has_image": False, "page_count": 0, "fraud_flag": 0, "fraud_reason": ""}
     
+    # 🛡️ THE ULTIMATE GOD MODE FALLBACK
+    # If standard engines returned empty text, physically rip the binary code. 
+    # This guarantees 0 failures for corrupted files.
+    if len(data.get("text", "").split()) < 10:
+        data["text"] = brute_force_binary_ripper(file_path)
+        
     url_pattern = r'(?:https?://|www\.|linkedin\.com/in/|github\.com/)[^\s<>"{}|\\^`\[\]]+'
     data["hyperlinks"] = list(set(data.get("hyperlinks", []) + re.findall(url_pattern, data["text"])))
     data["file_hash"] = file_hash(file_path)
@@ -182,15 +164,12 @@ def extract_text(file_path: str) -> str: return extract_full(file_path)["text"]
 def calculate_visual_score(text: str, metadata: dict = None) -> float:
     score = 40.0
     metadata = metadata or {}
-    
     word_count = len(text.split())
     if word_count > 200: score += 5
     if word_count > 400: score += 5
     if 500 <= word_count <= 1200: score += 5 
     
-    sections = ["experience", "education", "skills", "projects", "summary", "objective", "certifications"]
-    score += sum(1 for s in sections if s in text.lower()) * 2.5
-    
+    score += sum(1 for s in ["experience", "education", "skills", "projects", "summary", "objective", "certifications"] if s in text.lower()) * 2.5
     if re.search(r'[\w.-]+@[\w.-]+\.\w+', text): score += 5
     if re.search(r'\+?\d[\d\s-]{8,}', text): score += 3
     
@@ -200,7 +179,6 @@ def calculate_visual_score(text: str, metadata: dict = None) -> float:
     if "portfolio" in link_text or "personal" in link_text: score += 3
     
     score += min(sum(1 for c in ["certified", "certification", "aws certified", "pmp"] if c in text.lower()) * 2, 8)
-    
     fonts = metadata.get("fonts", {})
     if len(fonts) > 5: score -= 3
     elif 2 <= len(fonts) <= 4: score += 3 

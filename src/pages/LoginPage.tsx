@@ -30,9 +30,9 @@ export default function LoginPage() {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            content: "🚨 **BATS Alert:** A client just accessed the GeniusHub Enterprise Demo!",
+            content: "🚨 **BATS Alert:** A user just accessed the GeniusHub Enterprise Demo!",
             embeds: [{
-              title: "Client Session Started",
+              title: "User Session Started",
               color: 3447003,
               fields: [
                 { name: "Time (Local)", value: new Date().toLocaleString(), inline: true },
@@ -44,7 +44,6 @@ export default function LoginPage() {
         });
       } catch (err) {}
       
-      // 🎯 THE FIX: Ensure we keep the '?demo=demo-BATS' tag when redirecting to the dashboard!
       navigate('/?demo=demo-BATS');
     } else {
       setError('Invalid Access ID or Secure Password. Please contact BATS support.');
@@ -62,7 +61,6 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen w-full bg-[#050914] text-slate-200 flex items-center justify-center relative overflow-hidden p-4">
       
-      {/* 🌟 BRIGHTER CINEMATIC BACKGROUND WATERMARK 🌟 */}
       <div className="fixed inset-0 pointer-events-none flex items-center justify-center z-[0] overflow-hidden">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-blue-900/10 via-[#050914]/60 to-[#050914] z-[-1]" />
         
@@ -148,8 +146,8 @@ export default function LoginPage() {
                 <Lock className="w-7 h-7 text-blue-400 relative z-10" />
                 <div className="absolute inset-0 bg-blue-500/10 blur-xl" />
               </motion.div>
-              <h3 className="text-xl font-bold font-display text-white tracking-wide">Client Authentication</h3>
-              <p className="text-xs text-slate-400 mt-1">Enter your assigned BATS credentials</p>
+              <h3 className="text-xl font-bold font-display text-white tracking-wide">User Authentication</h3>
+              <p className="text-xs text-slate-400 mt-1">Enter your assigned credentials</p>
             </div>
 
             <form onSubmit={handleLogin} className="space-y-5">
@@ -162,7 +160,7 @@ export default function LoginPage() {
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
                     className="w-full bg-black/40 border border-white/10 rounded-xl py-3 pl-11 pr-4 text-sm text-white focus:outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/50 transition-all placeholder:text-slate-600"
-                    placeholder="Enter Client ID"
+                    placeholder="Enter Access ID"
                     required
                   />
                 </div>

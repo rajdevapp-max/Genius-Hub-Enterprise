@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-// 🎯 NEW: Imported "Key" icon for the new UI box
 import { FileText, Sparkles, Loader2, Target, CheckCircle2, XCircle, FileDown, Trophy, Shield, Zap, AlertTriangle, MapPin, Key } from 'lucide-react';
 import CandidateCard from '@/components/CandidateCard';
 import CandidateModal from '@/components/CandidateModal';
@@ -13,13 +12,14 @@ const SAMPLE_JD = `We are looking for a Senior Full Stack Developer with 5+ year
 export default function JDMatchPage() {
   const [jd, setJd] = useState('');
   const [location, setLocation] = useState(''); 
-  const [keySkills, setKeySkills] = useState(''); // 🎯 NEW: State for Key Skills
+  const [keySkills, setKeySkills] = useState(''); 
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<JDMatchResponse | null>(null);
   const [error, setError] = useState('');
   const [selectedCandidate, setSelectedCandidate] = useState<Candidate | null>(null);
 
-  const MONTHLY_LIMIT = 100;
+  // 🎯 THE FIX: Increased limit to 500
+  const MONTHLY_LIMIT = 500;
   const [usageCount, setUsageCount] = useState(0);
   const isDemo = typeof window !== 'undefined' && !!new URLSearchParams(window.location.search).get('demo');
 
@@ -30,7 +30,8 @@ export default function JDMatchPage() {
   useEffect(() => {
     if (isDemo) {
       const date = new Date();
-      const monthKey = `jd_usage_${date.getFullYear()}_${date.getMonth()}`; 
+      // 🎯 THE FIX: Changed key to "_v2_" to instantly reset everyone's tracker back to zero!
+      const monthKey = `jd_usage_v2_${date.getFullYear()}_${date.getMonth()}`; 
       const storedUsage = localStorage.getItem(monthKey);
       
       if (storedUsage) {
@@ -69,7 +70,7 @@ export default function JDMatchPage() {
 
     if (isDemo) {
       const date = new Date();
-      const monthKey = `jd_usage_${date.getFullYear()}_${date.getMonth()}`;
+      const monthKey = `jd_usage_v2_${date.getFullYear()}_${date.getMonth()}`;
       const currentUsage = parseInt(localStorage.getItem(monthKey) || '0', 10);
       
       if (currentUsage >= MONTHLY_LIMIT) {
@@ -82,7 +83,6 @@ export default function JDMatchPage() {
     setLoading(true);
     setError('');
     try {
-      // 🎯 NEW: Sending Key Skills to the API payload
       const data = await api.matchJD({ 
         job_description: jd, 
         top_k: 30, 
@@ -93,7 +93,7 @@ export default function JDMatchPage() {
 
       if (isDemo) {
         const date = new Date();
-        const monthKey = `jd_usage_${date.getFullYear()}_${date.getMonth()}`;
+        const monthKey = `jd_usage_v2_${date.getFullYear()}_${date.getMonth()}`;
         const currentUsage = parseInt(localStorage.getItem(monthKey) || '0', 10);
         const newUsage = currentUsage + 1;
         
@@ -168,7 +168,6 @@ export default function JDMatchPage() {
               />
             </div>
 
-            {/* 🎯 NEW: The Priority Key Skills Text Box */}
             <div className="relative mt-2">
               <Key className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-warning" />
               <input 

@@ -1,11 +1,11 @@
 """
-main.py — Vercel-Compatible Backend API v41.0
+main.py — Vercel-Compatible Backend API v42.0
 Features: Event-Driven ML Triggers, FAISS vector search, Key Skills Filter, Mass Database Management.
 """
 import os
 import zipfile
 import shutil
-import threading # 🎯 NEW: Required for Asynchronous ML Triggers
+import threading 
 from huggingface_hub import hf_hub_download
 
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
@@ -58,13 +58,13 @@ from classifier import classify_resume, extract_skills_regex, extract_all_skills
 from watcher import start_watcher_thread, get_watcher_stats
 from dedup import find_duplicates, remove_duplicates, scan_folder_duplicates
 
-from model_trainer import start_ml_cron, train_ml_model # 🎯 NEW: Imported train_ml_model for manual triggers
+from model_trainer import start_ml_cron, train_ml_model 
 
 init_db()
 start_watcher_thread()
 start_ml_cron() 
 
-app = FastAPI(title="Resume AI Intelligence Platform", version="41.0")
+app = FastAPI(title="Resume AI Intelligence Platform", version="42.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -109,16 +109,12 @@ class JDMatchRequest(BaseModel):
 def match_location(req_loc: str, resume_loc: str) -> bool:
     if not req_loc: return True
     if not resume_loc: return False 
-    
     req_loc = req_loc.lower().strip()
     res_loc = resume_loc.lower()
-    
     search_terms = GEO_MAPPING.get(req_loc, [req_loc])
     if req_loc not in search_terms: search_terms.append(req_loc)
-    
     for term in search_terms:
-        pattern = r'\b' + re.escape(term) + r'\b'
-        if re.search(pattern, res_loc): 
+        if re.search(r'\b' + re.escape(term) + r'\b', res_loc): 
             return True
     return False
 
@@ -567,7 +563,7 @@ def live_status():
 def trigger_ml_event():
     # Wait 15 seconds to let the parser extract the raw text from the new resumes
     time.sleep(15)
-    # Fire the Unsupervised ML pipeline on the newly updated 38K corpus!
+    # Fire the Unsupervised ML pipeline on the newly updated corpus!
     train_ml_model()
 
 @app.post("/api/upload")

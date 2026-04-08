@@ -1,6 +1,6 @@
 """
-model_trainer.py — Unsupervised ML Auto-Discovery Engine v1.0
-Features: TF-IDF Skill Extraction, N-Gram Co-occurrence, Autonomous Knowledge Graph Expansion.
+model_trainer.py — Unsupervised ML Auto-Discovery Engine v2.0
+Features: TF-IDF Skill Extraction, Ignore-Word Filtering, Autonomous JSON Export.
 """
 import os
 import json
@@ -41,7 +41,6 @@ def train_ml_model():
         
         tfidf_matrix = vectorizer.fit_transform(corpus)
         feature_names = vectorizer.get_feature_names_out()
-        
         sum_tfidf = tfidf_matrix.sum(axis=0)
         
         word_scores = [(feature_names[col], sum_tfidf[0, col]) for col in range(sum_tfidf.shape[1])]
@@ -50,6 +49,7 @@ def train_ml_model():
         existing_skills = set([s.lower() for s in SKILL_PATTERNS])
         new_discoveries = []
         
+        # The AI will ignore generic words and only learn technical nouns
         ignore_words = {"using", "worked", "application", "development", "developer", "engineer", "team", "project", "data", "software", "experience", "business", "design", "management", "testing", "technical", "system", "systems", "client", "clients"}
         
         for word, score in word_scores[:500]: 
@@ -73,9 +73,9 @@ def train_ml_model():
 def start_ml_cron():
     def cron_loop():
         while True:
-            time.sleep(86400) # Run every 24 hours
+            time.sleep(86400) # Run every 24 hours automatically
             train_ml_model()
 
     thread = threading.Thread(target=cron_loop, daemon=True)
     thread.start()
-    threading.Timer(60.0, train_ml_model).start() # Initial run 60 seconds after boot
+    threading.Timer(60.0, train_ml_model).start() # Initial run 60 seconds after server boot

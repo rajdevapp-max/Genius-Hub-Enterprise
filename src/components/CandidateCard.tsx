@@ -10,7 +10,6 @@ const escapeRegExp = (string: string) => {
   return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 };
 
-// 🎯 NEW: Added `onDelete` to the props!
 export default function CandidateCard({ candidate, rank, bookmarked, blindMode = false, onBookmark, onViewDetail, onDelete }: any) {
   const certs = candidate.certificates || [];
   const links = candidate.hyperlinks || [];
@@ -134,8 +133,9 @@ export default function CandidateCard({ candidate, rank, bookmarked, blindMode =
           </div>
 
           <div className="flex flex-wrap gap-1 mb-1.5">
-            {(candidate.matched_mandatory || []).map((s: string) => <span key={`m-${s}`} className="skill-tag border border-warning text-warning bg-warning/10">{s}</span>)}
-            {(candidate.matched_secondary || candidate.matched_skills || []).slice(0, 5).map((s: string) => <span key={`s-${s}`} className="skill-tag-matched">{s}</span>)}
+            {/* 🎯 THE FIX: Updated Colors! Mandatory = Green, Secondary = Yellow, Extracted = Green */}
+            {(candidate.matched_mandatory || []).map((s: string) => <span key={`m-${s}`} className="skill-tag border border-success text-success bg-success/10">{s}</span>)}
+            {(candidate.matched_secondary || candidate.matched_skills || []).slice(0, 5).map((s: string) => <span key={`s-${s}`} className="skill-tag border border-warning text-warning bg-warning/10">{s}</span>)}
             {(candidate.missing_mandatory || candidate.missing_skills || []).slice(0, 3).map((s: string) => <span key={`x-${s}`} className="skill-tag-missing">{s}</span>)}
             {(candidate.skills || [])
               .filter((s: string) => 
@@ -143,7 +143,7 @@ export default function CandidateCard({ candidate, rank, bookmarked, blindMode =
                 !(candidate.matched_secondary || candidate.matched_skills || []).includes(s) && 
                 !(candidate.missing_mandatory || candidate.missing_skills || []).includes(s)
               )
-              .slice(0, 4).map((s: string) => <span key={`o-${s}`} className="skill-tag">{s}</span>)}
+              .slice(0, 4).map((s: string) => <span key={`o-${s}`} className="skill-tag border border-success text-success bg-success/10">{s}</span>)}
           </div>
 
           {candidate.context_snippets && candidate.context_snippets.length > 0 && (
@@ -177,7 +177,6 @@ export default function CandidateCard({ candidate, rank, bookmarked, blindMode =
             </motion.button>
           )}
           
-          {/* 🎯 NEW: DELETE PROFILE BUTTON (Placed right where you asked!) */}
           {onDelete && !blindMode && (
              <motion.button 
               whileHover={{ scale: 1.1 }} 

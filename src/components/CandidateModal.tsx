@@ -13,7 +13,6 @@ export default function CandidateModal({ candidate, onClose, onDelete }: any) {
   const [previewText, setPreviewText] = useState('');
   const [loadingPreview, setLoadingPreview] = useState(false);
 
-  // --- NEW ESCAPE KEY LISTENER ---
   useEffect(() => {
     const handleKeyDown = (e: any) => {
       if (e.key === 'Escape' && candidate) {
@@ -86,7 +85,6 @@ export default function CandidateModal({ candidate, onClose, onDelete }: any) {
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                {/* 🎯 NEW: SECURE DELETE BUTTON IN MODAL */}
                 {onDelete && (
                   <button onClick={() => onDelete(candidate.id, candidate.name)} className="btn-ghost-glow !px-4 !py-2 !text-xs !text-destructive hover:!bg-destructive/10 !border-destructive/30">
                     <Trash2 className="w-3.5 h-3.5" /> Delete
@@ -242,24 +240,27 @@ export default function CandidateModal({ candidate, onClose, onDelete }: any) {
                     </h3>
                     
                     <div className="space-y-3">
+                      {/* 🎯 THE FIX: Green for Mandatory */}
                       {(candidate.matched_mandatory?.length || 0) > 0 && (
                         <div>
                           <p className="text-[10px] text-muted-foreground mb-1 uppercase tracking-wider">Mandatory Matches</p>
                           <div className="flex flex-wrap gap-1.5">
-                            {candidate.matched_mandatory?.map((s: any) => <span key={`m-${s}`} className="skill-tag border border-warning text-warning bg-warning/10">{s}</span>)}
+                            {candidate.matched_mandatory?.map((s: any) => <span key={`m-${s}`} className="skill-tag border border-success text-success bg-success/10">{s}</span>)}
                           </div>
                         </div>
                       )}
                       
+                      {/* 🎯 THE FIX: Yellow for Secondary */}
                       {((candidate.matched_secondary?.length || 0) > 0 || (candidate.matched_skills?.length || 0) > 0) && (
                         <div>
                           <p className="text-[10px] text-muted-foreground mb-1 uppercase tracking-wider">Secondary/Semantic Matches</p>
                           <div className="flex flex-wrap gap-1.5">
-                            {(candidate.matched_secondary || candidate.matched_skills || []).map((s: any) => <span key={`s-${s}`} className="skill-tag-matched">{s}</span>)}
+                            {(candidate.matched_secondary || candidate.matched_skills || []).map((s: any) => <span key={`s-${s}`} className="skill-tag border border-warning text-warning bg-warning/10">{s}</span>)}
                           </div>
                         </div>
                       )}
 
+                      {/* Red for Missing */}
                       {((candidate.missing_mandatory?.length || 0) > 0 || (candidate.missing_skills?.length || 0) > 0) && (
                         <div>
                           <p className="text-[10px] text-muted-foreground mb-1 uppercase tracking-wider">Missing Requirements</p>
@@ -269,6 +270,7 @@ export default function CandidateModal({ candidate, onClose, onDelete }: any) {
                         </div>
                       )}
 
+                      {/* 🎯 THE FIX: Green for Other Extracted Skills */}
                       <div>
                         <p className="text-[10px] text-muted-foreground mb-1 uppercase tracking-wider">Other Extracted Skills & Ontology</p>
                         <div className="flex flex-wrap gap-1.5">
@@ -278,7 +280,7 @@ export default function CandidateModal({ candidate, onClose, onDelete }: any) {
                               !(candidate.matched_secondary || candidate.matched_skills || []).includes(s) && 
                               !(candidate.missing_mandatory || candidate.missing_skills || []).includes(s)
                             )
-                            .map((s: any) => <span key={`o-${s}`} className="skill-tag">{s}</span>)}
+                            .map((s: any) => <span key={`o-${s}`} className="skill-tag border border-success text-success bg-success/10">{s}</span>)}
                         </div>
                       </div>
                     </div>
