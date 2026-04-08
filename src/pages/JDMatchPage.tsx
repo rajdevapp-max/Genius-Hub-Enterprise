@@ -9,30 +9,43 @@ import { api } from '@/lib/api';
 
 const SAMPLE_JD = `We are looking for a Senior Full Stack Developer with 5+ years of experience.\n\nRequirements:\n- Strong proficiency in React, TypeScript, and Node.js\n- Experience with cloud services (AWS/GCP)\n- Knowledge of SQL and NoSQL databases\n- Experience with CI/CD pipelines and Docker\n- Excellent problem-solving skills\n\nNice to have:\n- Experience with microservices architecture\n- Knowledge of GraphQL\n- Contributions to open-source projects`;
 
-// 🎯 UPDATED: Mathematical Semantic Similarity Engine with "Title Override"
+// 🎯 TRULY INTELLIGENT Semantic Similarity Engine
 const calculateSimilarity = (str1: string, str2: string) => {
   const getWords = (text: string) => text.toLowerCase().match(/\b[a-z0-9]+\b/g) || [];
   
-  const words1 = getWords(str1);
-  const words2 = getWords(str2);
-  
-  // 1. THE TITLE OVERRIDE: Check the first 15 words (Usually the Role/Header)
-  const titleWords1 = new Set(words1.slice(0, 15));
-  const titleWords2 = new Set(words2.slice(0, 15));
-  const titleIntersection = new Set([...titleWords1].filter(x => titleWords2.has(x)));
-  const titleUnion = new Set([...titleWords1, ...titleWords2]);
-  const titleSimilarity = titleUnion.size === 0 ? 0 : titleIntersection.size / titleUnion.size;
+  // 1. DYNAMIC ROLE HUNTER: Scans the entire JD to find the actual title
+  const extractRole = (text: string) => {
+    // Hunts for "Role:", "Title:", "seeking a", "looking for a", etc. anywhere in the text!
+    const roleMatch = text.match(/(?:role|title|position|seeking a|looking for a|overview)[:\-*]?\s*([a-zA-Z0-9\s]{3,40})(?:\n|\r|\.| for | to |-)/i);
+    
+    // If it finds the marker, it extracts the title. If not, it falls back to the first 15 words.
+    return roleMatch ? getWords(roleMatch[1]).join(" ") : getWords(text).slice(0, 15).join(" ");
+  };
 
-  // If the title area changed significantly (like IBM to Azure), it's a NEW job. Charge them!
-  if (titleSimilarity < 0.4) {
+  const role1 = extractRole(str1);
+  const role2 = extractRole(str2);
+
+  const roleWords1 = new Set(getWords(role1));
+  const roleWords2 = new Set(getWords(role2));
+  const roleIntersection = new Set([...roleWords1].filter(x => roleWords2.has(x)));
+  const roleUnion = new Set([...roleWords1, ...roleWords2]);
+  
+  // Mathematically compare the extracted roles
+  const roleSimilarity = roleUnion.size === 0 ? 0 : roleIntersection.size / roleUnion.size;
+
+  // If the extracted role changed drastically (e.g. IBM MDM Architect vs Azure Engineer), charge 1 credit!
+  if (roleSimilarity < 0.4) {
     return 0; 
   }
 
-  // 2. Normal 30-40% change rule for the full body text
+  // 2. NORMAL BODY CHECK: If the role is the same, check if they changed 35% of the body text
+  const words1 = getWords(str1);
+  const words2 = getWords(str2);
   const set1 = new Set(words1);
   const set2 = new Set(words2);
   const intersection = new Set([...set1].filter(x => set2.has(x)));
   const union = new Set([...set1, ...set2]);
+  
   return union.size === 0 ? 0 : intersection.size / union.size;
 };
 
@@ -106,6 +119,7 @@ export default function JDMatchPage() {
       const historyStr = localStorage.getItem(`jd_history_${monthKey}`) || '[]';
       try { jdHistory = JSON.parse(historyStr); } catch (e) { jdHistory = []; }
 
+      // Check JD history with intelligent Regex algorithm
       for (const pastJd of jdHistory) {
         if (calculateSimilarity(jd, pastJd) > 0.65) {
           isDuplicate = true;
