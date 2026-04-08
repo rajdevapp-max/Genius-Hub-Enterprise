@@ -9,13 +9,30 @@ import { api } from '@/lib/api';
 
 const SAMPLE_JD = `We are looking for a Senior Full Stack Developer with 5+ years of experience.\n\nRequirements:\n- Strong proficiency in React, TypeScript, and Node.js\n- Experience with cloud services (AWS/GCP)\n- Knowledge of SQL and NoSQL databases\n- Experience with CI/CD pipelines and Docker\n- Excellent problem-solving skills\n\nNice to have:\n- Experience with microservices architecture\n- Knowledge of GraphQL\n- Contributions to open-source projects`;
 
-// 🎯 NEW: Mathematical Semantic Similarity Engine
-// Compares text to ensure limits don't increase unless JD changes by more than 35%
+// 🎯 UPDATED: Mathematical Semantic Similarity Engine with "Title Override"
 const calculateSimilarity = (str1: string, str2: string) => {
-  const words1 = new Set(str1.toLowerCase().match(/\b[a-z0-9]+\b/g) || []);
-  const words2 = new Set(str2.toLowerCase().match(/\b[a-z0-9]+\b/g) || []);
-  const intersection = new Set([...words1].filter(x => words2.has(x)));
-  const union = new Set([...words1, ...words2]);
+  const getWords = (text: string) => text.toLowerCase().match(/\b[a-z0-9]+\b/g) || [];
+  
+  const words1 = getWords(str1);
+  const words2 = getWords(str2);
+  
+  // 1. THE TITLE OVERRIDE: Check the first 15 words (Usually the Role/Header)
+  const titleWords1 = new Set(words1.slice(0, 15));
+  const titleWords2 = new Set(words2.slice(0, 15));
+  const titleIntersection = new Set([...titleWords1].filter(x => titleWords2.has(x)));
+  const titleUnion = new Set([...titleWords1, ...titleWords2]);
+  const titleSimilarity = titleUnion.size === 0 ? 0 : titleIntersection.size / titleUnion.size;
+
+  // If the title area changed significantly (like IBM to Azure), it's a NEW job. Charge them!
+  if (titleSimilarity < 0.4) {
+    return 0; 
+  }
+
+  // 2. Normal 30-40% change rule for the full body text
+  const set1 = new Set(words1);
+  const set2 = new Set(words2);
+  const intersection = new Set([...set1].filter(x => set2.has(x)));
+  const union = new Set([...set1, ...set2]);
   return union.size === 0 ? 0 : intersection.size / union.size;
 };
 
@@ -86,12 +103,10 @@ export default function JDMatchPage() {
       monthKey = `jd_usage_v2_${date.getFullYear()}_${date.getMonth()}`;
       currentUsage = parseInt(localStorage.getItem(monthKey) || '0', 10);
       
-      // 🎯 NEW: Deduplication Logic
       const historyStr = localStorage.getItem(`jd_history_${monthKey}`) || '[]';
       try { jdHistory = JSON.parse(historyStr); } catch (e) { jdHistory = []; }
 
       for (const pastJd of jdHistory) {
-        // If similarity is greater than 65%, it means less than 35% changed. Mark as duplicate!
         if (calculateSimilarity(jd, pastJd) > 0.65) {
           isDuplicate = true;
           break;
@@ -117,7 +132,6 @@ export default function JDMatchPage() {
       setResult(data);
 
       if (isDemo && !isDuplicate) {
-        // 🎯 NEW: Only deduct credit if it is a BRAND NEW or heavily modified JD
         const newUsage = currentUsage + 1;
         localStorage.setItem(monthKey, newUsage.toString());
         setUsageCount(newUsage);
