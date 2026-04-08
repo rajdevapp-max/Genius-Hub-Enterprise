@@ -1,6 +1,6 @@
 """
-main.py — Vercel-Compatible Backend API v42.0
-Features: Event-Driven ML Triggers, FAISS vector search, Key Skills Filter, Mass Database Management.
+main.py — Vercel-Compatible Backend API v44.0 (UI Sync Update)
+Features: Merges normal search queries into the Mandatory bucket so frontend highlighting matches user intent.
 """
 import os
 import zipfile
@@ -64,7 +64,7 @@ init_db()
 start_watcher_thread()
 start_ml_cron() 
 
-app = FastAPI(title="Resume AI Intelligence Platform", version="42.0")
+app = FastAPI(title="Resume AI Intelligence Platform", version="44.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -246,11 +246,14 @@ def _resume_to_dict(resume, similarity: float = 0, mandatory_skills=None, second
     gap_years = getattr(resume, "total_gap_years", 0.0)
     rel_exp = getattr(resume, "relevant_experience_years", resume.experience_years)
 
+    # 🎯 THE FIX: Group matched_dynamic (Normal Search terms) with matched_mandatory so they turn Green!
+    combined_mandatory = list(set(matched_mandatory + matched_dynamic))
+
     return {
         "id": resume.id, "name": resume.name, "email": resume.email, "phone": resume.phone,
         "location": resume.location, "education": resume.education, "experience_years": resume.experience_years,
         "relevant_experience_years": rel_exp, "total_gap_years": gap_years, "skills": skills,
-        "matched_mandatory": matched_mandatory, "matched_secondary": matched_secondary + matched_dynamic,
+        "matched_mandatory": combined_mandatory, "matched_secondary": matched_secondary,
         "missing_mandatory": list(set(mandatory_skills) - set(matched_mandatory)), "context_snippets": context_snippets,
         "summary": resume.summary, "score": final_score, "ats_score": round(base_visual_score, 1),
         "filename": resume.filename, "certificates": certs, "hyperlinks": hyperlinks,
@@ -314,9 +317,13 @@ def search_resumes(req: SearchRequest):
             all_resumes = db.query(Resume).limit(FETCH_LIMIT).all()
             vector_results = [{"id": r.id, "similarity": 0} for r in all_resumes]
         
+        all_target_ids = [vr.get("id") for vr in vector_results if vr.get("id") is not None]
+        resumes_batch = db.query(Resume).filter(Resume.id.in_(all_target_ids)).all()
+        resume_map = {r.id: r for r in resumes_batch}
+        
         for vr in vector_results:
             rid = vr.get("id")
-            resume = db.query(Resume).get(rid)
+            resume = resume_map.get(rid)
             if not resume: continue
 
             if detected_location and not match_location(detected_location, resume.location): continue
@@ -388,9 +395,13 @@ def match_jd(req: JDMatchRequest):
         results = resume_index.search(req.job_description, req.top_k * 5)
         existing_ids = set()
 
+        all_target_ids = [r.get("id") for r in results if r.get("id") is not None]
+        resumes_batch = db.query(Resume).filter(Resume.id.in_(all_target_ids)).all()
+        resume_map = {r.id: r for r in resumes_batch}
+
         for r in results:
             rid = r.get("id")
-            resume = db.query(Resume).get(rid)
+            resume = resume_map.get(rid)
             if not resume: continue 
 
             if req.location and not match_location(req.location, resume.location): 
@@ -559,11 +570,8 @@ def live_status():
     try: return {"total_resumes": db.query(Resume).count(), "indexed": resume_index.total, **get_watcher_stats()}
     finally: db.close()
 
-# 🎯 NEW: Event-Driven ML Trigger function
 def trigger_ml_event():
-    # Wait 15 seconds to let the parser extract the raw text from the new resumes
     time.sleep(15)
-    # Fire the Unsupervised ML pipeline on the newly updated corpus!
     train_ml_model()
 
 @app.post("/api/upload")
@@ -573,7 +581,6 @@ async def upload_resume(file: UploadFile = File(...)):
     with open(path, "wb") as f: 
         f.write(content)
         
-    # 🎯 NEW: Fire the asynchronous Event-Driven ML Trigger without freezing the user's screen!
     threading.Thread(target=trigger_ml_event, daemon=True).start()
     
     return {"message": "File received. AI is extracting data and ML engine is recalibrating.", "data": {"id": 0, "name": file.filename}}
@@ -588,7 +595,6 @@ async def upload_batch(files: list[UploadFile] = File(...)):
             f.write(content)
         saved.append({"name": file.filename})
         
-    # 🎯 NEW: Fire the asynchronous Event-Driven ML Trigger
     threading.Thread(target=trigger_ml_event, daemon=True).start()
     
     return {"message": f"Successfully received {len(saved)} resumes. Engine extracting data and ML is training.", "results": saved}

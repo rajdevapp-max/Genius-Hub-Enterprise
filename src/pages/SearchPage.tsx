@@ -70,7 +70,6 @@ export default function SearchPage() {
     });
   };
 
-  // 🎯 NEW: Secure Delete Function for Search Page
   const handleDelete = async (id: number, name: string) => {
     if (!window.confirm(`Are you sure you want to permanently delete ${name}'s resume?`)) return;
     try {
@@ -261,13 +260,15 @@ export default function SearchPage() {
                       <Brain className="w-4 h-4" /> GeniusHub SEMANTIC SKILLS
                     </h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {/* 🎯 THE FIX: Changed to GREEN (success) */}
                       <div>
-                        <label className="text-[10px] text-warning mb-1 block uppercase tracking-wider font-bold">Mandatory Skills (Must Have)</label>
-                        <input className="input-glass !py-2 text-sm border-warning/30 focus:border-warning" placeholder="e.g. Python, React, AWS" value={mandatorySkills} onChange={e => setMandatorySkills(e.target.value)} />
+                        <label className="text-[10px] text-success mb-1 block uppercase tracking-wider font-bold">Mandatory Skills (Must Have)</label>
+                        <input className="input-glass !py-2 text-sm border-success/30 focus:border-success" placeholder="e.g. Python, React, AWS" value={mandatorySkills} onChange={e => setMandatorySkills(e.target.value)} />
                       </div>
+                      {/* 🎯 THE FIX: Changed to YELLOW (warning) */}
                       <div>
-                        <label className="text-[10px] text-success mb-1 block uppercase tracking-wider font-bold">Secondary Skills (Nice to Have)</label>
-                        <input className="input-glass !py-2 text-sm border-success/30 focus:border-success" placeholder="e.g. Docker, Redis" value={secondarySkills} onChange={e => setSecondarySkills(e.target.value)} />
+                        <label className="text-[10px] text-warning mb-1 block uppercase tracking-wider font-bold">Secondary Skills (Nice to Have)</label>
+                        <input className="input-glass !py-2 text-sm border-warning/30 focus:border-warning" placeholder="e.g. Docker, Redis" value={secondarySkills} onChange={e => setSecondarySkills(e.target.value)} />
                       </div>
                     </div>
                   </div>
@@ -378,7 +379,7 @@ export default function SearchPage() {
                     blindMode={isBlindMode} 
                     onBookmark={() => toggleBookmark(c.id)}
                     onViewDetail={() => setSelectedCandidate(c)}
-                    onDelete={handleDelete} // 🎯 NEW: DELETE HOOKED UP
+                    onDelete={handleDelete}
                   />
                 ))}
               </div>
@@ -422,7 +423,7 @@ export default function SearchPage() {
       <CandidateModal
         candidate={selectedCandidate}
         onClose={() => setSelectedCandidate(null)}
-        onDelete={handleDelete} // 🎯 NEW: DELETE HOOKED UP
+        onDelete={handleDelete} 
       />
     </>
   );
