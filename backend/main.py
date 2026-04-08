@@ -1,6 +1,6 @@
 """
-main.py — ORIGINAL SPACE VERSION (V45.1)
-Features: Cloud DB Sync (38K+ Resumes), Semantic Split JD Matching, UI Color Sync, and Anti-Crash Analytics Optimization.
+main.py — ORIGINAL SPACE VERSION (V46.0)
+Features: Anti-Freeze Uploads (Disabled instant ML training), Fast Analytics, Semantic JD Match.
 """
 import os
 import zipfile
@@ -51,7 +51,7 @@ import csv
 import io
 from datetime import datetime
 from sqlalchemy import or_
-from sqlalchemy.orm import defer # 🎯 THE FIX: Used for lightweight memory fetching
+from sqlalchemy.orm import defer 
 
 from database import init_db, SessionLocal, Resume
 from embedder import resume_index
@@ -60,13 +60,13 @@ from classifier import classify_resume, extract_skills_regex, extract_all_skills
 from watcher import start_watcher_thread, get_watcher_stats
 from dedup import find_duplicates, remove_duplicates, scan_folder_duplicates
 
-from model_trainer import start_ml_cron, train_ml_model 
+from model_trainer import start_ml_cron
 
 init_db()
 start_watcher_thread()
-start_ml_cron() 
+start_ml_cron() # 🎯 The ML engine now ONLY runs via background cron, not on every upload!
 
-app = FastAPI(title="Resume AI Intelligence Platform (Original)", version="45.1")
+app = FastAPI(title="Resume AI Intelligence Platform (Original)", version="46.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -473,7 +473,6 @@ def match_jd(req: JDMatchRequest):
 
     return {"candidates": candidates, "required_skills": extracted_reqs, "total_resumes": resume_index.total, "total_time": time.time() - start}
 
-# 🎯 THE FIX 1: Cache duplicates output to avoid hitting DB 3 times
 @app.get("/api/duplicates")
 def get_duplicates(): 
     dupes = find_duplicates()
@@ -531,13 +530,11 @@ def search_suggestions(q: str = Query("", min_length=1)):
         return {"names": sug["names"][:10], "skills": sug["skills"][:10], "locations": sug["locations"][:8]}
     finally: db.close()
 
-# 🎯 THE FIX 2: Added `defer` to stop downloading massive raw text to calculate simple stats!
 @app.get("/api/stats")
 def get_stats():
     db = SessionLocal()
     try:
-        # Prevents loading massive raw text into RAM, fixing the Database Timeout crashes!
-        resumes = db.query(Resume).options(defer("raw_text"), defer("summary")).all()
+        resumes = db.query(Resume).options(defer(Resume.raw_text), defer(Resume.summary)).all()
         total = len(resumes)
         if total == 0: return {"total_resumes": 0, "avg_experience": 0, "avg_score": 0, "top_skills": [], "experience_distribution": [], "location_distribution": [], "education_distribution": [], "score_distribution": [], "processing_status": get_watcher_stats(), "certificates_count": 0, "resumes_with_images": 0, "avg_word_count": 0, "avg_page_count": 0, "skill_categories": []}
         
@@ -593,10 +590,7 @@ def live_status():
     try: return {"total_resumes": db.query(Resume).count(), "indexed": resume_index.total, **get_watcher_stats()}
     finally: db.close()
 
-def trigger_ml_event():
-    time.sleep(15)
-    train_ml_model()
-
+# 🎯 THE FIX: REMOVED threading triggers that force a massive ML retrain on every upload!
 @app.post("/api/upload")
 async def upload_resume(file: UploadFile = File(...)):
     path = os.path.join(RESUME_DIR, file.filename)
@@ -604,9 +598,8 @@ async def upload_resume(file: UploadFile = File(...)):
     with open(path, "wb") as f: 
         f.write(content)
         
-    threading.Thread(target=trigger_ml_event, daemon=True).start()
-    
-    return {"message": "File received. AI is extracting data and ML engine is recalibrating.", "data": {"id": 0, "name": file.filename}}
+    # No more frozen DBs! The resume extracts instantly, ML catches up at night.
+    return {"message": "File received. AI is extracting data.", "data": {"id": 0, "name": file.filename}}
 
 @app.post("/api/upload-batch")
 async def upload_batch(files: list[UploadFile] = File(...)):
@@ -618,9 +611,7 @@ async def upload_batch(files: list[UploadFile] = File(...)):
             f.write(content)
         saved.append({"name": file.filename})
         
-    threading.Thread(target=trigger_ml_event, daemon=True).start()
-    
-    return {"message": f"Successfully received {len(saved)} resumes. Engine extracting data and ML is training.", "results": saved}
+    return {"message": f"Successfully received {len(saved)} resumes. Engine extracting data.", "results": saved}
 
 @app.post("/api/candidate/{resume_id}/delete")
 def delete_resume(resume_id: int):
