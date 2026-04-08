@@ -9,6 +9,16 @@ import { api } from '@/lib/api';
 
 const SAMPLE_JD = `We are looking for a Senior Full Stack Developer with 5+ years of experience.\n\nRequirements:\n- Strong proficiency in React, TypeScript, and Node.js\n- Experience with cloud services (AWS/GCP)\n- Knowledge of SQL and NoSQL databases\n- Experience with CI/CD pipelines and Docker\n- Excellent problem-solving skills\n\nNice to have:\n- Experience with microservices architecture\n- Knowledge of GraphQL\n- Contributions to open-source projects`;
 
+// 🎯 NEW: Mathematical Semantic Similarity Engine
+// Compares text to ensure limits don't increase unless JD changes by more than 35%
+const calculateSimilarity = (str1: string, str2: string) => {
+  const words1 = new Set(str1.toLowerCase().match(/\b[a-z0-9]+\b/g) || []);
+  const words2 = new Set(str2.toLowerCase().match(/\b[a-z0-9]+\b/g) || []);
+  const intersection = new Set([...words1].filter(x => words2.has(x)));
+  const union = new Set([...words1, ...words2]);
+  return union.size === 0 ? 0 : intersection.size / union.size;
+};
+
 export default function JDMatchPage() {
   const [jd, setJd] = useState('');
   const [location, setLocation] = useState(''); 
@@ -66,12 +76,29 @@ export default function JDMatchPage() {
   const handleMatch = async () => {
     if (!jd.trim()) return;
 
+    let isDuplicate = false;
+    let currentUsage = 0;
+    let monthKey = '';
+    let jdHistory: string[] = [];
+
     if (isDemo) {
       const date = new Date();
-      const monthKey = `jd_usage_v2_${date.getFullYear()}_${date.getMonth()}`;
-      const currentUsage = parseInt(localStorage.getItem(monthKey) || '0', 10);
+      monthKey = `jd_usage_v2_${date.getFullYear()}_${date.getMonth()}`;
+      currentUsage = parseInt(localStorage.getItem(monthKey) || '0', 10);
       
-      if (currentUsage >= MONTHLY_LIMIT) {
+      // 🎯 NEW: Deduplication Logic
+      const historyStr = localStorage.getItem(`jd_history_${monthKey}`) || '[]';
+      try { jdHistory = JSON.parse(historyStr); } catch (e) { jdHistory = []; }
+
+      for (const pastJd of jdHistory) {
+        // If similarity is greater than 65%, it means less than 35% changed. Mark as duplicate!
+        if (calculateSimilarity(jd, pastJd) > 0.65) {
+          isDuplicate = true;
+          break;
+        }
+      }
+
+      if (!isDuplicate && currentUsage >= MONTHLY_LIMIT) {
         setError(`Monthly Limit Reached: You have exhausted your ${MONTHLY_LIMIT} JD matches for this month. Please wait until next month.`);
         return; 
       }
@@ -89,14 +116,14 @@ export default function JDMatchPage() {
       });
       setResult(data);
 
-      if (isDemo) {
-        const date = new Date();
-        const monthKey = `jd_usage_v2_${date.getFullYear()}_${date.getMonth()}`;
-        const currentUsage = parseInt(localStorage.getItem(monthKey) || '0', 10);
+      if (isDemo && !isDuplicate) {
+        // 🎯 NEW: Only deduct credit if it is a BRAND NEW or heavily modified JD
         const newUsage = currentUsage + 1;
-        
         localStorage.setItem(monthKey, newUsage.toString());
         setUsageCount(newUsage);
+        
+        jdHistory.push(jd);
+        localStorage.setItem(`jd_history_${monthKey}`, JSON.stringify(jdHistory));
       }
 
     } catch (e: any) {
@@ -226,7 +253,6 @@ export default function JDMatchPage() {
                     </button>
                   </div>
                   <div className="flex flex-wrap gap-1.5 mb-4">
-                    {/* 🎯 THE FIX: Adds a star icon and special styling for user-defined priority skills! */}
                     {result.required_skills?.map((s: string, i: number) => {
                       const isPriority = keySkills.split(',').map(k => k.trim().toLowerCase()).includes(s.toLowerCase());
                       return (
