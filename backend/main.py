@@ -1,6 +1,6 @@
 """
-main.py — ORIGINAL SPACE VERSION (V45.0)
-Features: Cloud DB Sync (38K+ Resumes), Semantic Split JD Matching, and UI Color Sync.
+main.py — ORIGINAL SPACE VERSION (V45.1)
+Features: Cloud DB Sync (38K+ Resumes), Semantic Split JD Matching, UI Color Sync, and Anti-Crash Analytics Optimization.
 """
 import os
 import zipfile
@@ -51,6 +51,7 @@ import csv
 import io
 from datetime import datetime
 from sqlalchemy import or_
+from sqlalchemy.orm import defer # 🎯 THE FIX: Used for lightweight memory fetching
 
 from database import init_db, SessionLocal, Resume
 from embedder import resume_index
@@ -65,7 +66,7 @@ init_db()
 start_watcher_thread()
 start_ml_cron() 
 
-app = FastAPI(title="Resume AI Intelligence Platform (Original)", version="45.0")
+app = FastAPI(title="Resume AI Intelligence Platform (Original)", version="45.1")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -151,7 +152,6 @@ def parse_dynamic_query(query: str) -> list[str]:
     ignore_words = {"with", "and", "or", "in", "for", "experience", "years", "developer", "engineer", "usa", "us", "india", "uk", "canada", "australia", "europe"}
     return [w for w in words if w not in ignore_words and len(w) > 2]
 
-# 🎯 THE FIX: Pure ML JD Extraction
 def parse_universal_jd(text: str) -> list[str]:
     known_skills = extract_all_skills(text)
     edu = extract_education(text)
@@ -229,7 +229,6 @@ def _resume_to_dict(resume, similarity: float = 0, mandatory_skills=None, second
     gap_years = getattr(resume, "total_gap_years", 0.0)
     rel_exp = getattr(resume, "relevant_experience_years", resume.experience_years)
 
-    # 🎯 THE FIX: Combines normal search queries to turn Green in UI
     combined_mandatory = list(set(matched_mandatory + matched_dynamic))
 
     return {
@@ -390,23 +389,20 @@ def match_jd(req: JDMatchRequest):
             if req.location and not match_location(req.location, resume.location): 
                 continue
 
-            # 🎯 THE FIX: Semantic Split for Priority Skills!
             if user_key_skills:
                 missing_key = False
                 raw_text = (resume.raw_text or "").lower()
                 skills_text = (resume.skills or "").lower()
                 for ks in user_key_skills:
-                    # 1. Check for exact match first
                     pat_exact = r'\b' + re.escape(ks.lower()) + r'\b'
                     if re.search(pat_exact, raw_text) or re.search(pat_exact, skills_text):
                         continue
                     
-                    # 2. Semantic Fallback: Split the phrase and verify all parts exist independently
                     parts = ks.lower().split()
                     if len(parts) > 1:
                         all_parts_found = True
                         for part in parts:
-                            if len(part) > 2: # Ignore filler words
+                            if len(part) > 2: 
                                 pat_part = r'\b' + re.escape(part) + r'\b'
                                 if not (re.search(pat_part, raw_text) or re.search(pat_part, skills_text)):
                                     all_parts_found = False
@@ -414,7 +410,6 @@ def match_jd(req: JDMatchRequest):
                         if all_parts_found:
                             continue
                     
-                    # 3. If neither exact nor split match exists, eliminate the candidate
                     missing_key = True
                     break
                 
@@ -425,7 +420,6 @@ def match_jd(req: JDMatchRequest):
             if extracted_reqs and len(d["matched_mandatory"]) == 0: continue
             candidates.append(d)
 
-        # 🎯 THE FIX: Apply Semantic Split logic to the Fallback fetch as well
         if len(candidates) < req.top_k and extracted_reqs:
             conditions = []
             for sk in extracted_reqs[:8]: 
@@ -479,8 +473,17 @@ def match_jd(req: JDMatchRequest):
 
     return {"candidates": candidates, "required_skills": extracted_reqs, "total_resumes": resume_index.total, "total_time": time.time() - start}
 
+# 🎯 THE FIX 1: Cache duplicates output to avoid hitting DB 3 times
 @app.get("/api/duplicates")
-def get_duplicates(): return {"db_duplicates": find_duplicates(), "folder_duplicates": scan_folder_duplicates(), "total_duplicate_groups": len(find_duplicates()), "total_duplicate_files": sum(d["count"] - 1 for d in find_duplicates())}
+def get_duplicates(): 
+    dupes = find_duplicates()
+    folder_dupes = scan_folder_duplicates()
+    return {
+        "db_duplicates": dupes, 
+        "folder_duplicates": folder_dupes, 
+        "total_duplicate_groups": len(dupes), 
+        "total_duplicate_files": sum(d["count"] - 1 for d in dupes)
+    }
 
 @app.post("/api/duplicates/remove")
 def remove_dupes(dry_run: bool = Query(False)): return remove_duplicates(dry_run=dry_run)
@@ -528,11 +531,13 @@ def search_suggestions(q: str = Query("", min_length=1)):
         return {"names": sug["names"][:10], "skills": sug["skills"][:10], "locations": sug["locations"][:8]}
     finally: db.close()
 
+# 🎯 THE FIX 2: Added `defer` to stop downloading massive raw text to calculate simple stats!
 @app.get("/api/stats")
 def get_stats():
     db = SessionLocal()
     try:
-        resumes = db.query(Resume).all()
+        # Prevents loading massive raw text into RAM, fixing the Database Timeout crashes!
+        resumes = db.query(Resume).options(defer("raw_text"), defer("summary")).all()
         total = len(resumes)
         if total == 0: return {"total_resumes": 0, "avg_experience": 0, "avg_score": 0, "top_skills": [], "experience_distribution": [], "location_distribution": [], "education_distribution": [], "score_distribution": [], "processing_status": get_watcher_stats(), "certificates_count": 0, "resumes_with_images": 0, "avg_word_count": 0, "avg_page_count": 0, "skill_categories": []}
         
