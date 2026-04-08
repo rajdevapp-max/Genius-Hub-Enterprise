@@ -1,6 +1,6 @@
 """
-main.py — Vercel-Compatible Backend API v44.0 (UI Sync Update)
-Features: Merges normal search queries into the Mandatory bucket so frontend highlighting matches user intent.
+main.py — ORIGINAL SPACE VERSION (V45.0)
+Features: Cloud DB Sync (38K+ Resumes), Semantic Split JD Matching, and UI Color Sync.
 """
 import os
 import zipfile
@@ -14,6 +14,7 @@ os.environ["OMP_NUM_THREADS"] = "1"
 from dotenv import load_dotenv
 load_dotenv()
 
+# 🚀 CRITICAL: This syncs your 38K cloud database! Requires HF_TOKEN in Space Secrets.
 def sync_cloud_resumes():
     token = os.environ.get("HF_TOKEN")
     if not token:
@@ -64,7 +65,7 @@ init_db()
 start_watcher_thread()
 start_ml_cron() 
 
-app = FastAPI(title="Resume AI Intelligence Platform", version="44.0")
+app = FastAPI(title="Resume AI Intelligence Platform (Original)", version="45.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -150,34 +151,16 @@ def parse_dynamic_query(query: str) -> list[str]:
     ignore_words = {"with", "and", "or", "in", "for", "experience", "years", "developer", "engineer", "usa", "us", "india", "uk", "canada", "australia", "europe"}
     return [w for w in words if w not in ignore_words and len(w) > 2]
 
+# 🎯 THE FIX: Pure ML JD Extraction
 def parse_universal_jd(text: str) -> list[str]:
-    if len(text.split()) < 15:
-        clean = re.sub(r'[^a-zA-Z0-9\s\.\+#-]', ' ', text).lower()
-        ignore = {"with", "and", "or", "in", "for", "experience", "years", "developer", "engineer", "the", "a", "an", "is", "of", "to", "at", "by", "on"}
-        words = [w.title() for w in clean.split() if w not in ignore and len(w) > 2]
-        return list(set(words))
-        
     known_skills = extract_all_skills(text)
     edu = extract_education(text)
     
-    stopwords = {"the","and","for","with","experience","knowledge","skills","required","preferred","team","work","years","looking","candidate","role","job","description","requirements","nice","have","must","strong","understanding","ability","working","environment","development","management","business","support","design","including","related","using","building","systems","new","data","based","high","quality","across","multiple","different","various","best","practices","proven","excellent","good","written","verbal","communication","degree","bachelors","masters","phd","computer","science","engineering","equivalent","software","hardware","technical","technology","tools","technologies","applications","application","web","mobile","cloud","infrastructure","architecture","services","service","product","products","project","projects","process","processes","testing","test","tests","code","coding","programming","language","languages","framework","frameworks","library","libraries","database","databases","system","networks","security","secure","user","users","client","clients","customer","customers","internal","external","internal/external","agile","scrum","sprint","sprints","cycle","cycles","life","lifecycle","end","end-to-end","full","stack","front","back","frontend","backend","ui","ux","interface","user-interface","user-experience","designer","manager","director","lead","leader","senior","junior","mid","level","entry","entry-level","mid-level","senior-level","principal","staff","architect","architects","this","that","are","you","will","can","not","from","what","how","why","about","our","your","which","their","there","here","all","any","some","many","most","other","another","such","only","same","own","very","too","also","well","even","still","just","now","then","today","tomorrow","yesterday","always","never","often","sometimes","usually","rarely","once","twice","again","soon","early","late","first","last","next","previous","past","future","current","present", "usa", "india", "uk", "canada", "australia"}
-    
-    words = re.findall(r'\b[A-Z][a-zA-Z0-9.-]{2,}\b', text)
-    custom = [w for w in words if w.lower() not in stopwords]
-    quoted = re.findall(r'"([^"]+)"', text)
-    
     combined = []
-    seen = set()
-    
-    lists_to_check = [quoted]
-    if edu: lists_to_check.append([edu])
-    lists_to_check.extend([known_skills, custom])
-    
-    for lst in lists_to_check:
-        for item in lst:
-            if item.lower() not in seen:
-                seen.add(item.lower())
-                combined.append(item)
+    if edu: combined.append(edu)
+    for sk in known_skills:
+        if sk not in combined:
+            combined.append(sk)
                 
     return combined[:25] 
 
@@ -246,7 +229,7 @@ def _resume_to_dict(resume, similarity: float = 0, mandatory_skills=None, second
     gap_years = getattr(resume, "total_gap_years", 0.0)
     rel_exp = getattr(resume, "relevant_experience_years", resume.experience_years)
 
-    # 🎯 THE FIX: Group matched_dynamic (Normal Search terms) with matched_mandatory so they turn Green!
+    # 🎯 THE FIX: Combines normal search queries to turn Green in UI
     combined_mandatory = list(set(matched_mandatory + matched_dynamic))
 
     return {
@@ -407,15 +390,34 @@ def match_jd(req: JDMatchRequest):
             if req.location and not match_location(req.location, resume.location): 
                 continue
 
+            # 🎯 THE FIX: Semantic Split for Priority Skills!
             if user_key_skills:
                 missing_key = False
                 raw_text = (resume.raw_text or "").lower()
                 skills_text = (resume.skills or "").lower()
                 for ks in user_key_skills:
-                    pat = r'\b' + re.escape(ks.lower()) + r'\b'
-                    if not (re.search(pat, raw_text) or re.search(pat, skills_text)):
-                        missing_key = True
-                        break
+                    # 1. Check for exact match first
+                    pat_exact = r'\b' + re.escape(ks.lower()) + r'\b'
+                    if re.search(pat_exact, raw_text) or re.search(pat_exact, skills_text):
+                        continue
+                    
+                    # 2. Semantic Fallback: Split the phrase and verify all parts exist independently
+                    parts = ks.lower().split()
+                    if len(parts) > 1:
+                        all_parts_found = True
+                        for part in parts:
+                            if len(part) > 2: # Ignore filler words
+                                pat_part = r'\b' + re.escape(part) + r'\b'
+                                if not (re.search(pat_part, raw_text) or re.search(pat_part, skills_text)):
+                                    all_parts_found = False
+                                    break
+                        if all_parts_found:
+                            continue
+                    
+                    # 3. If neither exact nor split match exists, eliminate the candidate
+                    missing_key = True
+                    break
+                
                 if missing_key: continue
 
             existing_ids.add(rid)
@@ -423,6 +425,7 @@ def match_jd(req: JDMatchRequest):
             if extracted_reqs and len(d["matched_mandatory"]) == 0: continue
             candidates.append(d)
 
+        # 🎯 THE FIX: Apply Semantic Split logic to the Fallback fetch as well
         if len(candidates) < req.top_k and extracted_reqs:
             conditions = []
             for sk in extracted_reqs[:8]: 
@@ -440,10 +443,25 @@ def match_jd(req: JDMatchRequest):
                             raw_text = (r.raw_text or "").lower()
                             skills_text = (r.skills or "").lower()
                             for ks in user_key_skills:
-                                pat = r'\b' + re.escape(ks.lower()) + r'\b'
-                                if not (re.search(pat, raw_text) or re.search(pat, skills_text)):
-                                    missing_key = True
-                                    break
+                                pat_exact = r'\b' + re.escape(ks.lower()) + r'\b'
+                                if re.search(pat_exact, raw_text) or re.search(pat_exact, skills_text):
+                                    continue
+                                
+                                parts = ks.lower().split()
+                                if len(parts) > 1:
+                                    all_parts_found = True
+                                    for part in parts:
+                                        if len(part) > 2:
+                                            pat_part = r'\b' + re.escape(part) + r'\b'
+                                            if not (re.search(pat_part, raw_text) or re.search(pat_part, skills_text)):
+                                                all_parts_found = False
+                                                break
+                                    if all_parts_found:
+                                        continue
+                                        
+                                missing_key = True
+                                break
+                                
                             if missing_key: continue
 
                         existing_ids.add(r.id)

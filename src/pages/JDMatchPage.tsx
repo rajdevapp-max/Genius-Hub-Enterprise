@@ -18,7 +18,6 @@ export default function JDMatchPage() {
   const [error, setError] = useState('');
   const [selectedCandidate, setSelectedCandidate] = useState<Candidate | null>(null);
 
-  // 🎯 THE FIX: Increased limit to 500
   const MONTHLY_LIMIT = 500;
   const [usageCount, setUsageCount] = useState(0);
   const isDemo = typeof window !== 'undefined' && !!new URLSearchParams(window.location.search).get('demo');
@@ -30,7 +29,6 @@ export default function JDMatchPage() {
   useEffect(() => {
     if (isDemo) {
       const date = new Date();
-      // 🎯 THE FIX: Changed key to "_v2_" to instantly reset everyone's tracker back to zero!
       const monthKey = `jd_usage_v2_${date.getFullYear()}_${date.getMonth()}`; 
       const storedUsage = localStorage.getItem(monthKey);
       
@@ -229,7 +227,7 @@ export default function JDMatchPage() {
                   </div>
                   <div className="flex flex-wrap gap-1.5 mb-4">
                     {result.required_skills?.map((s: string, i: number) => (
-                      <motion.span key={s} initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ delay: i * 0.03 }} className="skill-tag border border-warning text-warning bg-warning/10">{s}</motion.span>
+                      <motion.span key={s} initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ delay: i * 0.03 }} className="skill-tag border border-success text-success bg-success/10">{s}</motion.span>
                     ))}
                   </div>
                   <div className="flex items-center gap-4 text-[10px] font-mono text-muted-foreground">
@@ -273,6 +271,16 @@ export default function JDMatchPage() {
                     </div>
                   </GlowingCard>
                 )}
+
+                {/* 🎯 NEW: The Empty State UI so it doesn't look frozen! */}
+                {result.candidates.length === 0 && (
+                  <GlowingCard className="p-10 text-center mt-4">
+                    <AlertTriangle className="w-10 h-10 text-warning/50 mx-auto mb-3" />
+                    <p className="text-foreground font-medium mb-1">0 Candidates Passed Priority Filter</p>
+                    <p className="text-sm text-muted-foreground">The AI verified the skills, but no candidate possesses all requested priority keywords simultaneously. Try relaxing your Priority Box.</p>
+                  </GlowingCard>
+                )}
+
               </motion.div>
             ) : (
               <motion.div key="empty" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0 }}>
