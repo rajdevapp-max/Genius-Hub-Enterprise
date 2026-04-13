@@ -1,13 +1,15 @@
 import { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Search, FileText, BarChart3, Upload, Menu, X, LogOut } from 'lucide-react';
+import { Search, FileText, BarChart3, Upload, Menu, X, LogOut, Database } from 'lucide-react'; // 🎯 Added Database icon
 import { motion, AnimatePresence } from 'framer-motion';
 import { ThemeToggle, useTheme } from '@/components/ThemeToggle';
 
+// 🎯 THE FIX: Added the Database tab right here!
 const navItems = [
   { path: '/', label: 'GeniusHub Search', icon: Search, desc: 'Hybrid intelligence' },
   { path: '/jd-match', label: 'JD Match', icon: FileText, desc: 'Job description match' },
   { path: '/analytics', label: 'Analytics', icon: BarChart3, desc: 'Real-time dashboard' },
+  { path: '/database', label: 'Database', icon: Database, desc: 'Master candidate list' }, 
   { path: '/upload', label: 'Upload', icon: Upload, desc: 'Add resumes' },
 ];
 
@@ -17,7 +19,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const [collapsed, setCollapsed] = useState(false);
   const { theme, toggle } = useTheme();
 
-  // 🎯 THE FIX: Check if we are on the demo site using the secret key
+  // 🔐 Check if we are on the demo site using the secret key
   const isDemoSite = window.location.search.includes("demo=demo-BATS");
 
   // 🚨 TAB CLOSE TRACKER 🚨
@@ -27,120 +29,122 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
     const handleTabClose = () => {
       const isAuth = sessionStorage.getItem('bats_demo_auth');
-      const loginTime = sessionStorage.getItem('bats_login_time');
-      const userId = sessionStorage.getItem('bats_login_id');
-
-      if (isAuth === 'true' && loginTime && userId) {
-        const durationMs = Date.now() - parseInt(loginTime);
-        const minutes = Math.floor(durationMs / 60000);
-        const seconds = Math.floor((durationMs % 60000) / 1000);
-        
-        const payload = JSON.stringify({
-          content: "🛑 **BATS Alert:** A client closed the browser tab and ended the session.",
-          embeds: [{
-            title: "Client Session Ended (Tab Closed)",
-            color: 15548997,
-            fields: [
-              { name: "Access ID", value: userId, inline: true },
-              { name: "Total Session Duration", value: `${minutes}m ${seconds}s`, inline: true }
-            ],
-            footer: { text: "BATS Telemetry System" }
-          }]
-        });
-
-        const blob = new Blob([payload], { type: 'application/json' });
-        navigator.sendBeacon('https://discord.com/api/webhooks/1488185677211238430/FKx2kBLSNK6Xyu1kVUT8MLDcPovQnKdiLb2ztl2bB0cLa35yJXPNB1fVid5-5CYWwcSp', blob);
+      if (isAuth === 'true') {
+        api.deleteAllResumes().catch(console.error);
       }
     };
 
-    window.addEventListener('beforeunload', handleTabClose);
-    return () => window.removeEventListener('beforeunload', handleTabClose);
+    window.addEventListener('unload', handleTabClose);
+    return () => window.removeEventListener('unload', handleTabClose);
   }, [isDemoSite]);
 
-  const handleLogout = () => {
-    const loginTime = sessionStorage.getItem('bats_login_time');
-    const userId = sessionStorage.getItem('bats_login_id') || 'Unknown';
-    let durationStr = "Unknown";
-
-    if (loginTime) {
-      const durationMs = Date.now() - parseInt(loginTime);
-      const minutes = Math.floor(durationMs / 60000);
-      const seconds = Math.floor((durationMs % 60000) / 1000);
-      durationStr = `${minutes}m ${seconds}s`;
+  const handleLogout = async () => {
+    if (window.confirm("Are you sure you want to logout? All demo data will be permanently wiped.")) {
+      try {
+        await api.deleteAllResumes();
+      } catch (e) {
+        console.error("Wipe failed during logout", e);
+      }
+      sessionStorage.removeItem('bats_demo_auth');
+      sessionStorage.removeItem('bats_login_time');
+      sessionStorage.removeItem('bats_login_id');
+      navigate(`/login${window.location.search}`);
     }
-
-    try {
-      fetch('https://discord.com/api/webhooks/1488185677211238430/FKx2kBLSNK6Xyu1kVUT8MLDcPovQnKdiLb2ztl2bB0cLa35yJXPNB1fVid5-5CYWwcSp', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          content: "🛑 **BATS Alert:** A client explicitly clicked Logout.",
-          embeds: [{
-            title: "Client Session Ended (Manual Logout)",
-            color: 15548997,
-            fields: [
-              { name: "Access ID", value: userId, inline: true },
-              { name: "Total Session Duration", value: durationStr, inline: true }
-            ],
-            footer: { text: "BATS Telemetry System" }
-          }]
-        })
-      });
-    } catch (err) {}
-
-    sessionStorage.removeItem('bats_demo_auth');
-    sessionStorage.removeItem('bats_login_time');
-    sessionStorage.removeItem('bats_login_id');
-    navigate('/login?demo=demo-BATS');
   };
 
   return (
-    <div className="flex min-h-screen bg-background">
-      <motion.aside
-        animate={{ width: collapsed ? 68 : 260 }}
-        className="fixed left-0 top-0 bottom-0 z-40 flex flex-col border-r border-sidebar-border bg-sidebar overflow-hidden"
-        style={{ boxShadow: '4px 0 30px hsl(var(--background) / 0.5)' }}
+    <div className="min-h-screen bg-background flex relative overflow-hidden">
+      
+      {/* Mobile Menu Toggle */}
+      <button 
+        onClick={() => setCollapsed(!collapsed)}
+        className="lg:hidden fixed top-4 right-4 z-50 p-2 rounded-xl bg-card border border-border text-foreground shadow-lg"
       >
-        <div className="flex items-center px-4 h-16 border-b border-sidebar-border shrink-0">
-          <Link to={isDemoSite ? "/?demo=demo-BATS" : "/"} className="flex items-center gap-3 shrink-0 overflow-hidden cursor-pointer">
-            <motion.div whileHover={{ rotate: 15, scale: 1.1 }} className="w-9 h-9 flex items-center justify-center shrink-0">
-              <img src="/comp-logo.PNG" alt="BATS Logo" className="w-full h-full object-contain drop-shadow-sm" />
-            </motion.div>
-            <AnimatePresence>
-              {!collapsed && (
-                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="overflow-hidden whitespace-nowrap">
-                  <h1 className="text-xs font-bold font-display tracking-wider text-foreground">BATS GeniusHub</h1>
-                  <p className="text-[9px] text-muted-foreground tracking-wide">INTELLIGENCE v6.0</p>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </Link>
+        {collapsed ? <Menu className="w-5 h-5" /> : <X className="w-5 h-5" />}
+      </button>
+
+      {/* Sidebar */}
+      <motion.aside 
+        initial={false}
+        animate={{ 
+          width: collapsed ? 80 : 280,
+          x: typeof window !== 'undefined' && window.innerWidth < 1024 && collapsed ? -280 : 0
+        }}
+        className="fixed top-0 left-0 h-screen z-40 flex flex-col bg-sidebar/80 backdrop-blur-xl border-r border-sidebar-border shadow-2xl"
+      >
+        {/* Logo Area */}
+        <div className="h-20 flex items-center px-6 border-b border-sidebar-border relative overflow-hidden group cursor-pointer" onClick={() => setCollapsed(!collapsed)}>
+          <div className="absolute inset-0 bg-gradient-to-r from-primary/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+          <motion.div 
+            animate={{ rotate: collapsed ? 360 : 0 }} 
+            transition={{ duration: 0.5 }}
+            className="w-10 h-10 rounded-xl bg-primary/20 flex items-center justify-center shrink-0 border border-primary/30 shadow-[0_0_15px_rgba(var(--primary-rgb),0.3)]"
+          >
+            <img src="/comp-logo.PNG" alt="GeniusHub Logo" className="w-6 h-6 object-contain drop-shadow-md" />
+          </motion.div>
           
-          <button onClick={() => setCollapsed(!collapsed)} className="ml-auto p-1.5 rounded-lg hover:bg-secondary text-muted-foreground shrink-0 transition-colors">
-            {collapsed ? <Menu className="w-4 h-4" /> : <X className="w-4 h-4" />}
-          </button>
+          <AnimatePresence mode="wait">
+            {!collapsed && (
+              <motion.div 
+                initial={{ opacity: 0, x: -10 }} 
+                animate={{ opacity: 1, x: 0 }} 
+                exit={{ opacity: 0, x: -10 }}
+                className="ml-4 whitespace-nowrap"
+              >
+                <h1 className="text-xl font-black font-display tracking-tight text-foreground">
+                  Genius<span className="text-primary">Hub</span>
+                </h1>
+                <p className="text-[10px] text-muted-foreground font-mono uppercase tracking-widest mt-0.5">AI Engine v4.0</p>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
 
-        {/* Nav */}
-        <nav className="flex-1 py-4 px-2.5 space-y-1">
-          {navItems.map(({ path, label, icon: Icon, desc }) => {
-            const active = location.pathname === path;
-            const targetPath = isDemoSite ? `${path}?demo=demo-BATS` : path; // Keep demo key in URLs when navigating!
+        {/* Navigation Links */}
+        <nav className="flex-1 px-3 py-6 space-y-2 overflow-y-auto hidden-scrollbar">
+          {navItems.map((item) => {
+            const isActive = location.pathname === item.path;
+            const Icon = item.icon;
             
             return (
-              <Link key={path} to={targetPath} className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-300 relative group ${active ? 'text-primary' : 'text-muted-foreground hover:text-foreground hover:bg-secondary/60'}`}>
-                {active && <motion.div layoutId="activeNav" className="absolute inset-0 rounded-xl bg-primary/8 border border-primary/15" style={{ boxShadow: '0 0 20px hsl(var(--primary) / 0.06)' }} transition={{ type: 'spring', stiffness: 400, damping: 30 }} />}
-                <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 transition-all relative z-10 ${active ? 'bg-primary/15' : 'bg-secondary/40 group-hover:bg-secondary'}`}>
-                  <Icon className="w-4 h-4" />
-                </div>
-                <AnimatePresence>
-                  {!collapsed && (
-                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="min-w-0 relative z-10">
-                      <span className="block text-sm font-medium">{label}</span>
-                      <span className="block text-[9px] text-muted-foreground">{desc}</span>
-                    </motion.div>
+              <Link key={item.path} to={item.path + window.location.search}>
+                <motion.div
+                  whileHover={{ scale: 1.02, x: 4 }}
+                  whileTap={{ scale: 0.98 }}
+                  className={`
+                    relative flex items-center px-3 py-3.5 rounded-xl cursor-pointer transition-all duration-300 group overflow-hidden
+                    ${isActive 
+                      ? 'bg-primary/10 shadow-[inset_0_0_20px_rgba(var(--primary-rgb),0.1)] border border-primary/20' 
+                      : 'hover:bg-sidebar-accent/50 border border-transparent'
+                    }
+                  `}
+                >
+                  {isActive && (
+                    <motion.div layoutId="activeNav" className="absolute left-0 top-1/4 bottom-1/4 w-1 bg-primary rounded-r-full shadow-[0_0_10px_rgba(var(--primary-rgb),0.8)]" />
                   )}
-                </AnimatePresence>
+                  
+                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 transition-colors duration-300 ${isActive ? 'bg-primary/20 text-primary shadow-[0_0_10px_rgba(var(--primary-rgb),0.2)]' : 'text-muted-foreground group-hover:text-foreground group-hover:bg-sidebar-accent'}`}>
+                    <Icon className="w-4 h-4" />
+                  </div>
+                  
+                  <AnimatePresence>
+                    {!collapsed && (
+                      <motion.div 
+                        initial={{ opacity: 0, width: 0 }}
+                        animate={{ opacity: 1, width: 'auto' }}
+                        exit={{ opacity: 0, width: 0 }}
+                        className="ml-4 whitespace-nowrap overflow-hidden"
+                      >
+                        <span className={`block text-sm font-bold ${isActive ? 'text-foreground' : 'text-muted-foreground group-hover:text-foreground'}`}>
+                          {item.label}
+                        </span>
+                        <span className="block text-[10px] text-muted-foreground/70 mt-0.5 font-medium">
+                          {item.desc}
+                        </span>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </motion.div>
               </Link>
             );
           })}
@@ -151,7 +155,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           <div className={`flex items-center ${collapsed ? 'justify-center flex-col gap-2' : 'justify-between px-2'}`}>
             <ThemeToggle theme={theme} toggle={toggle} />
             
-            {/* 🎯 THE FIX: Only render the Logout button if it is the Demo Site! */}
+            {/* Only render the Logout button if it is the Demo Site! */}
             {isDemoSite && (
               <button 
                 onClick={handleLogout} 
@@ -173,8 +177,21 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         </div>
       </motion.aside>
 
-      <main className="flex-1 transition-all duration-300 relative" style={{ marginLeft: collapsed ? 68 : 260 }}>
-        <div className="p-6 lg:p-8 max-w-7xl mx-auto">{children}</div>
+      <main className="flex-1 transition-all duration-300 relative" style={{ marginLeft: collapsed && typeof window !== 'undefined' && window.innerWidth >= 1024 ? 80 : (typeof window !== 'undefined' && window.innerWidth < 1024 ? 0 : 280) }}>
+        <div className="p-6 lg:p-10 max-w-7xl mx-auto w-full pt-20 lg:pt-10">
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={location.pathname}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              transition={{ duration: 0.3 }}
+              className="h-full"
+            >
+              {children}
+            </motion.div>
+          </AnimatePresence>
+        </div>
       </main>
     </div>
   );
