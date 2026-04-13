@@ -10,10 +10,14 @@ from datetime import datetime
 
 DB_PATH = os.environ.get("DB_PATH", "resumes.db")
 
+# 🎯 THE FIX: Increased connection pool size and timeout to prevent QueuePool 500 Errors
 engine = create_engine(
     f"sqlite:///{DB_PATH}",
     echo=False,
     connect_args={"check_same_thread": False, "timeout": 60},
+    pool_size=20,
+    max_overflow=50,
+    pool_timeout=60
 )
 
 @event.listens_for(engine, "connect")

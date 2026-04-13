@@ -1,12 +1,12 @@
 """
-main.py — ORIGINAL SPACE VERSION (V46.0)
-Features: Anti-Freeze Uploads (Disabled instant ML training), Fast Analytics, Semantic JD Match.
+main.py — ORIGINAL SPACE VERSION (V48.0)
+Features: SHA-256 Strict Deduplication, LinkedIn URL Sanitization, Fast Analytics Cache, and Hyper-Speed Regex Search.
 """
 import os
 import zipfile
 import shutil
 import threading 
-from huggingface_hub import hf_hub_download
+import hashlib # 🎯 NEW: For Strict Content Hashing
 
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 os.environ["OMP_NUM_THREADS"] = "1"
@@ -66,7 +66,7 @@ init_db()
 start_watcher_thread()
 start_ml_cron() # 🎯 The ML engine now ONLY runs via background cron, not on every upload!
 
-app = FastAPI(title="Resume AI Intelligence Platform (Original)", version="46.0")
+app = FastAPI(title="Resume AI Intelligence Platform (Original)", version="48.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -167,7 +167,24 @@ def parse_universal_jd(text: str) -> list[str]:
 def _resume_to_dict(resume, similarity: float = 0, mandatory_skills=None, secondary_skills=None, dynamic_skills=None) -> dict:
     skills = json.loads(resume.skills) if resume.skills else []
     certs = json.loads(resume.certificates) if resume.certificates else []
-    hyperlinks = json.loads(resume.hyperlinks) if resume.hyperlinks else []
+    raw_links = json.loads(resume.hyperlinks) if resume.hyperlinks else []
+    
+    # 🎯 BUG 1 FIX: Link Sanitization Engine (Prevents 404s and fixes bad LinkedIn URLs)
+    cleaned_links = []
+    for link in raw_links:
+        cl = re.sub(r'[.,;)\]]+$', '', link.strip()) # Strip trailing punctuation
+        if cl.startswith(('www.', 'linkedin.com', 'github.com')): 
+            cl = 'https://' + cl
+        
+        # Fix missing /in/ path for LinkedIn (e.g. linkedin.com/vinay -> linkedin.com/in/vinay)
+        match = re.search(r'(https?://(?:www\.)?linkedin\.com)/([^/]+)/?$', cl)
+        if match and match.group(2).lower() not in ['in', 'company', 'school', 'jobs']:
+            cl = re.sub(r'(https?://(?:www\.)?linkedin\.com)/([^/]+)/?$', r'\1/in/\2/', cl)
+            
+        if cl not in cleaned_links:
+            cleaned_links.append(cl)
+            
+    hyperlinks = cleaned_links
     
     mandatory_skills = mandatory_skills or []
     secondary_skills = secondary_skills or []
@@ -253,7 +270,8 @@ def search_resumes(req: SearchRequest):
     start = time.time()
     db = SessionLocal()
     candidates = []
-    FETCH_LIMIT = 1000 
+    # 🎯 THE SPEED FIX: Lower limit removes heavy lag
+    FETCH_LIMIT = 250 
     try:
         original_query = req.query or ""
         detected_location = req.mandatory_location
@@ -302,6 +320,11 @@ def search_resumes(req: SearchRequest):
         all_target_ids = [vr.get("id") for vr in vector_results if vr.get("id") is not None]
         resumes_batch = db.query(Resume).filter(Resume.id.in_(all_target_ids)).all()
         resume_map = {r.id: r for r in resumes_batch}
+
+        # Pre-compile Regex logic
+        compiled_mandatory = [re.compile(r'\b' + re.escape(m.lower()) + r'\b') for m in req.mandatory_skills]
+        compiled_exact = [re.compile(r'\b' + re.escape(phrase.lower()) + r'\b', re.IGNORECASE) for phrase in exact_phrases]
+        compiled_not = [re.compile(r'\b' + re.escape(term.lower()) + r'\b', re.IGNORECASE) for term in not_terms]
         
         for vr in vector_results:
             rid = vr.get("id")
@@ -316,8 +339,9 @@ def search_resumes(req: SearchRequest):
             certs_str = "".join(json.loads(resume.certificates) if resume.certificates else []).lower()
             universal_text = f"{raw_text} {links_str} {certs_str} {(resume.location or '').lower()}"
 
-            if any(phrase.lower() not in universal_text for phrase in exact_phrases): continue
-            if any(term.lower() in universal_text for term in not_terms): continue
+            if any(phrase_pat.search(universal_text) is None for phrase_pat in compiled_exact): continue
+            if any(not_pat.search(universal_text) is not None for not_pat in compiled_not): continue
+
             if req.min_experience > 0 and resume.experience_years < req.min_experience: continue
             if req.mandatory_education and req.mandatory_education.lower() not in (resume.education or "").lower(): continue
 
@@ -328,9 +352,8 @@ def search_resumes(req: SearchRequest):
             if req.require_codechef and "codechef.com" not in links_str and "codechef.com" not in raw_text: continue
 
             missing_mandatory = False
-            for m_skill in req.mandatory_skills:
-                pattern = r'\b' + re.escape(m_skill.lower()) + r'\b'
-                if not any(re.search(pattern, sl) for sl in skills_text_lower.split(',')) and not re.search(pattern, raw_text) and not re.search(pattern, (resume.location or "").lower()):
+            for m_pat in compiled_mandatory:
+                if not m_pat.search(skills_text_lower) and not m_pat.search(raw_text) and not m_pat.search((resume.location or "").lower()):
                     missing_mandatory = True
                     break
             if missing_mandatory: continue 
@@ -530,8 +553,17 @@ def search_suggestions(q: str = Query("", min_length=1)):
         return {"names": sug["names"][:10], "skills": sug["skills"][:10], "locations": sug["locations"][:8]}
     finally: db.close()
 
+# Global Memory Cache
+STATS_CACHE = {"data": None, "last_updated": 0}
+CACHE_DURATION = 300 # 5 minutes
+
 @app.get("/api/stats")
 def get_stats():
+    global STATS_CACHE
+    
+    if STATS_CACHE["data"] and (time.time() - STATS_CACHE["last_updated"] < CACHE_DURATION):
+        return STATS_CACHE["data"]
+
     db = SessionLocal()
     try:
         resumes = db.query(Resume).options(defer(Resume.raw_text), defer(Resume.summary)).all()
@@ -581,7 +613,12 @@ def get_stats():
             elif s < 85: score_ranges["70-85"] += 1
             else: score_ranges["85-100"] += 1
         
-        return {"total_resumes": total, "avg_experience": round(avg_exp, 1), "avg_score": round(avg_score, 1), "avg_word_count": round(avg_words), "avg_page_count": round(avg_pages, 1), "resumes_with_images": resumes_with_images, "certificates_count": total_certs, "top_skills": [{"skill": s, "count": c} for s, c in top_skills], "experience_distribution": [{"range": k, "count": v} for k, v in exp_ranges.items()], "location_distribution": [{"location": l, "count": c} for l, c in sorted(loc_count.items(), key=lambda x: -x[1])[:15]], "education_distribution": [{"education": e, "count": c} for e, c in sorted(edu_count.items(), key=lambda x: -x[1])], "score_distribution": [{"range": k, "count": v} for k, v in score_ranges.items()], "processing_status": get_watcher_stats(), "fraud_count": fraud_count, "avg_impact_score": round(avg_impact, 1)}
+        result = {"total_resumes": total, "avg_experience": round(avg_exp, 1), "avg_score": round(avg_score, 1), "avg_word_count": round(avg_words), "avg_page_count": round(avg_pages, 1), "resumes_with_images": resumes_with_images, "certificates_count": total_certs, "top_skills": [{"skill": s, "count": c} for s, c in top_skills], "experience_distribution": [{"range": k, "count": v} for k, v in exp_ranges.items()], "location_distribution": [{"location": l, "count": c} for l, c in sorted(loc_count.items(), key=lambda x: -x[1])[:15]], "education_distribution": [{"education": e, "count": c} for e, c in sorted(edu_count.items(), key=lambda x: -x[1])], "score_distribution": [{"range": k, "count": v} for k, v in score_ranges.items()], "processing_status": get_watcher_stats(), "fraud_count": fraud_count, "avg_impact_score": round(avg_impact, 1)}
+        
+        STATS_CACHE["data"] = result
+        STATS_CACHE["last_updated"] = time.time()
+        
+        return result
     finally: db.close()
 
 @app.get("/api/live-status")
@@ -590,28 +627,58 @@ def live_status():
     try: return {"total_resumes": db.query(Resume).count(), "indexed": resume_index.total, **get_watcher_stats()}
     finally: db.close()
 
-# 🎯 THE FIX: REMOVED threading triggers that force a massive ML retrain on every upload!
+# 🎯 BUG 2 FIX: Strict SHA-256 Hashing blocks fake filenames!
 @app.post("/api/upload")
 async def upload_resume(file: UploadFile = File(...)):
-    path = os.path.join(RESUME_DIR, file.filename)
     content = await file.read()
+    file_hash = hashlib.sha256(content).hexdigest()
+    
+    db = SessionLocal()
+    try:
+        existing = db.query(Resume).filter(Resume.file_hash == file_hash).first()
+        if existing:
+            return {
+                "message": f"Duplicate Rejected: {file.filename} is identical to existing profile {existing.filename}.", 
+                "data": {"id": existing.id, "name": existing.filename}, 
+                "duplicate": True
+            }
+    finally:
+        db.close()
+        
+    path = os.path.join(RESUME_DIR, file.filename)
     with open(path, "wb") as f: 
         f.write(content)
         
-    # No more frozen DBs! The resume extracts instantly, ML catches up at night.
     return {"message": "File received. AI is extracting data.", "data": {"id": 0, "name": file.filename}}
 
 @app.post("/api/upload-batch")
 async def upload_batch(files: list[UploadFile] = File(...)):
     saved = []
-    for file in files:
-        path = os.path.join(RESUME_DIR, file.filename)
-        content = await file.read()
-        with open(path, "wb") as f: 
-            f.write(content)
-        saved.append({"name": file.filename})
+    duplicates = 0
+    db = SessionLocal()
+    
+    try:
+        for file in files:
+            content = await file.read()
+            file_hash = hashlib.sha256(content).hexdigest()
+            
+            existing = db.query(Resume).filter(Resume.file_hash == file_hash).first()
+            if existing:
+                duplicates += 1
+                continue
+                
+            path = os.path.join(RESUME_DIR, file.filename)
+            with open(path, "wb") as f: 
+                f.write(content)
+            saved.append({"name": file.filename})
+    finally:
+        db.close()
         
-    return {"message": f"Successfully received {len(saved)} resumes. Engine extracting data.", "results": saved}
+    msg = f"Successfully received {len(saved)} resumes. Engine extracting data."
+    if duplicates > 0:
+        msg += f" ⚠️ ({duplicates} duplicate resumes auto-rejected)."
+        
+    return {"message": msg, "results": saved}
 
 @app.post("/api/candidate/{resume_id}/delete")
 def delete_resume(resume_id: int):
