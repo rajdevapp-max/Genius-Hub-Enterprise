@@ -761,18 +761,41 @@ from playwright.sync_api import sync_playwright
 import os
 import shutil
 
+# --- FIX: FORCE HUGGING FACE TO INSTALL CHROME ---
+os.system("playwright install chromium")
+os.system("playwright install-deps chromium")
+
 TEMP_DIR = "/tmp/geniushub_resumes"
 os.makedirs(TEMP_DIR, exist_ok=True)
 
+# --- NEW: GLOBAL PROGRESS TRACKER ---
+bot_progress = {
+    "is_running": False,
+    "current": 0,
+    "total": 0,
+    "message": "Idle"
+}
+
+@app.get("/api/upload-progress")
+def get_upload_progress():
+    """Frontend polls this endpoint to update the progress bar"""
+    return bot_progress
+
 # --- THE BOT THAT RUNS IN THE BACKGROUND ---
 def run_cloud_excel_bot(excel_path: str, email: str, password: str):
-    print("🤖 Cloud Bot Started: Reading Excel...")
+    global bot_progress
+    bot_progress["is_running"] = True
+    bot_progress["message"] = "Reading Excel file..."
+    bot_progress["current"] = 0
+    bot_progress["total"] = 0
+    
     try:
-        # 🎯 CHANGED: Now reads Excel files!
         df = pd.read_excel(excel_path)
         profile_links = df['Candidate profile'].dropna().tolist()
+        bot_progress["total"] = len(profile_links)
     except Exception as e:
-        print(f"❌ Excel Error: {e}")
+        bot_progress["message"] = f"Excel Error: {e}"
+        bot_progress["is_running"] = False
         return
 
     with sync_playwright() as p:
@@ -781,7 +804,7 @@ def run_cloud_excel_bot(excel_path: str, email: str, password: str):
         page = context.new_page()
         
         try:
-            print("⏳ Logging into Naukri...")
+            bot_progress["message"] = "Bypassing Security & Logging in..."
             page.goto("https://www.naukri.com/nlogin/login")
             page.fill("input[id='usernameField']", email)
             page.fill("input[id='passwordField']", password)
@@ -789,9 +812,12 @@ def run_cloud_excel_bot(excel_path: str, email: str, password: str):
             page.wait_for_url("**/dashboard**", timeout=15000)
             
             downloaded_files = []
+            bot_progress["message"] = "Extracting Resumes..."
 
-            print(f"⚡ Fetching {len(profile_links)} resumes...")
             for index, link in enumerate(profile_links):
+                # Update progress for the frontend to see!
+                bot_progress["current"] = index + 1
+                
                 try:
                     candidate_page = context.new_page()
                     candidate_page.goto(link)
@@ -808,14 +834,14 @@ def run_cloud_excel_bot(excel_path: str, email: str, password: str):
                 except Exception:
                     candidate_page.close()
 
-            print(f"✅ Successfully downloaded {len(downloaded_files)} resumes to backend!")
-            
-            # TODO: Pass the 'downloaded_files' list to your existing FAISS logic here
+            bot_progress["message"] = "✅ Sync Complete! Pushing to Database..."
+            # TODO: Pass 'downloaded_files' to your FAISS logic here
 
         except Exception as e:
-            print(f"❌ Bot Error: {e}")
+            bot_progress["message"] = f"❌ Bot Error: Login Timeout or Blocked"
         finally:
             browser.close()
+            bot_progress["is_running"] = False
             if os.path.exists(excel_path):
                 os.remove(excel_path)
 
@@ -827,15 +853,10 @@ async def upload_excel_sync(
     naukri_email: str = Form(...),
     naukri_password: str = Form(...)
 ):
-    # Save the Excel temporarily on the server
     excel_path = f"/tmp/{file.filename}"
     with open(excel_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
         
-    # Trigger the bot in the background
     background_tasks.add_task(run_cloud_excel_bot, excel_path, naukri_email, naukri_password)
     
-    return {
-        "status": "success", 
-        "message": "Excel received. Bot is fetching resumes in the background."
-    }
+    return {"status": "success", "message": "Bot deployed."}

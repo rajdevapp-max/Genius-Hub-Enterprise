@@ -19,7 +19,7 @@ export default function DatabasePage() {
   const [liveSync, setLiveSync] = useState(false);
   const [recentImports, setRecentImports] = useState<any[]>([]);
 
-  // 🚀 UPDATED: Naukri Excel Upload State
+  // Naukri Excel Upload State
   const [showExcelUpload, setShowExcelUpload] = useState(false);
   const [excelFile, setExcelFile] = useState<File | null>(null);
   const [email, setEmail] = useState('');
@@ -27,8 +27,10 @@ export default function DatabasePage() {
   const [uploadStatus, setUploadStatus] = useState('');
   const [isUploading, setIsUploading] = useState(false);
 
+  // 🚀 NEW: Progress Tracking State
+  const [progressData, setProgressData] = useState({ current: 0, total: 0, message: '', is_running: false });
+
   const PER_PAGE = 50;
-  // 🎯 CHANGED: Updated to point to the new Excel endpoint
   const BACKEND_API_URL = "https://vinu019-resume-backend.hf.space/api/upload-excel-sync";
 
   const fetchDatabase = async (p: number) => {
@@ -71,6 +73,35 @@ export default function DatabasePage() {
     return () => clearInterval(interval);
   }, [liveSync, page]);
 
+  // 🚀 NEW: Poll Backend for Progress when Uploading
+  useEffect(() => {
+    let interval: any;
+    if (isUploading) {
+      interval = setInterval(async () => {
+        try {
+          const res = await fetch("https://vinu019-resume-backend.hf.space/api/upload-progress");
+          const data = await res.json();
+          setProgressData(data);
+          
+          // Stop polling if the bot says it's done
+          if (!data.is_running && data.total > 0 && data.current >= data.total) {
+            setIsUploading(false);
+            setUploadStatus("✅ " + data.message);
+            setLiveSync(true); // Automatically turn on radar!
+            clearInterval(interval);
+          } else if (!data.is_running && data.message.includes("Error")) {
+            setIsUploading(false);
+            setUploadStatus(data.message);
+            clearInterval(interval);
+          }
+        } catch (e) {
+          console.error("Failed to fetch progress");
+        }
+      }, 1500); // Check every 1.5 seconds
+    }
+    return () => clearInterval(interval);
+  }, [isUploading]);
+
   // 🚀 Handle Excel Submit
   const handleExcelSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -81,6 +112,7 @@ export default function DatabasePage() {
 
     setIsUploading(true);
     setUploadStatus("🚀 Deploying ForgePro Cloud Bot...");
+    setProgressData({ current: 0, total: 0, message: 'Waking up server...', is_running: true });
 
     const formData = new FormData();
     formData.append("file", excelFile);
@@ -88,27 +120,13 @@ export default function DatabasePage() {
     formData.append("naukri_password", password);
 
     try {
-      const response = await fetch(BACKEND_API_URL, {
+      await fetch(BACKEND_API_URL, {
         method: "POST",
         body: formData,
       });
-
-      const data = await response.json();
-
-      if (response.ok) {
-        setUploadStatus("✅ " + data.message);
-        setExcelFile(null);
-        setEmail('');
-        setPassword('');
-        // Turn on Live Sync automatically to watch them flow in!
-        setLiveSync(true); 
-      } else {
-        setUploadStatus("❌ Error: " + data.message);
-      }
+      // We don't await the JSON response here because the polling useEffect takes over!
     } catch (error) {
-      console.error("Upload error:", error);
       setUploadStatus("❌ Failed to connect to the backend bot.");
-    } finally {
       setIsUploading(false);
     }
   };
@@ -169,7 +187,6 @@ export default function DatabasePage() {
         </div>
         
         <div className="flex items-center gap-3">
-          {/* 🚀 CHANGED: Button text to Excel */}
           <button 
             onClick={() => setShowExcelUpload(!showExcelUpload)}
             className={`flex items-center gap-2 px-4 py-2 rounded-xl font-bold tracking-wide transition-all ${
@@ -204,7 +221,7 @@ export default function DatabasePage() {
         </div>
       </div>
 
-      {/* 🚀 THE EXCEL UPLOAD PANEL */}
+      {/* THE EXCEL UPLOAD PANEL */}
       <AnimatePresence>
         {showExcelUpload && (
           <motion.div 
@@ -227,7 +244,6 @@ export default function DatabasePage() {
               <form onSubmit={handleExcelSubmit} className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
                 <div className="md:col-span-1">
                   <label className="block text-xs font-medium text-muted-foreground mb-1">Exported Excel File</label>
-                  {/* 🎯 CHANGED: Accepts Excel formats */}
                   <input 
                     type="file" 
                     accept=".xlsx, .xls"
@@ -267,7 +283,26 @@ export default function DatabasePage() {
                 </div>
               </form>
 
-              {uploadStatus && (
+              {/* 🚀 THE NEW PROGRESS BAR UI */}
+              {(isUploading || progressData.total > 0) && (
+                <div className="mt-5 p-4 bg-gray-900/50 border border-gray-800 rounded-xl">
+                  <div className="flex justify-between text-xs font-bold text-gray-400 mb-2">
+                    <span className="text-blue-400">{progressData.message}</span>
+                    <span>{progressData.current} / {progressData.total || '?'} Resumes</span>
+                  </div>
+                  
+                  <div className="w-full bg-gray-800 rounded-full h-2.5 overflow-hidden border border-gray-700">
+                    <motion.div 
+                      className="bg-blue-500 h-2.5 rounded-full shadow-[0_0_10px_rgba(59,130,246,0.8)]"
+                      initial={{ width: 0 }}
+                      animate={{ width: progressData.total > 0 ? `${(progressData.current / progressData.total) * 100}%` : '0%' }}
+                      transition={{ ease: "easeOut", duration: 0.5 }}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {uploadStatus && !isUploading && (
                 <div className={`mt-4 p-3 rounded-lg text-sm font-medium border ${uploadStatus.includes('✅') ? 'bg-success/10 text-success border-success/20' : uploadStatus.includes('❌') ? 'bg-destructive/10 text-destructive border-destructive/20' : 'bg-blue-500/10 text-blue-400 border-blue-500/20'}`}>
                   {uploadStatus}
                 </div>
