@@ -99,7 +99,7 @@ export default function DatabasePage() {
     e.preventDefault();
     if (!excelFile || !email || !password) return;
 
-    setProgressData({ status: 'RUNNING', current: 0, total: 0, message: 'Waking up server...' });
+    setProgressData({ status: 'RUNNING', current: 0, total: 0, message: 'Deploying Bot...' });
 
     const formData = new FormData();
     formData.append("file", excelFile);
@@ -178,7 +178,6 @@ export default function DatabasePage() {
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6 pb-20">
       
-      {/* HEADER SECTION */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-extrabold font-display tracking-tight text-foreground flex items-center gap-3">
@@ -233,7 +232,6 @@ export default function DatabasePage() {
                 </div>
               </div>
 
-              {/* STAGE 1: Upload Form */}
               {(progressData.status === 'IDLE' || progressData.status === 'ERROR') && (
                 <form onSubmit={handleExcelSubmit} className="space-y-4">
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
@@ -262,7 +260,6 @@ export default function DatabasePage() {
                 </form>
               )}
 
-              {/* STAGE 2: Progress or OTP Screen */}
               {(progressData.status === 'RUNNING' || progressData.status === 'SUCCESS' || progressData.status === 'AWAITING_OTP') && (
                 <div className="p-5 bg-gray-900/50 border border-gray-800 rounded-xl">
                   
@@ -285,7 +282,7 @@ export default function DatabasePage() {
                     </div>
                   )}
 
-                  {/* 🚀 STAGE 2.5: The OTP Input Bridge */}
+                  {/* 🚀 OTP Input Bridge */}
                   {progressData.status === 'AWAITING_OTP' && (
                     <div className="mt-4 p-4 border border-warning/30 bg-warning/5 rounded-lg flex flex-col gap-3">
                       <div className="flex items-center gap-2 text-warning font-bold text-sm">
@@ -305,6 +302,7 @@ export default function DatabasePage() {
                       </div>
                     </div>
                   )}
+
                 </div>
               )}
             </GlowingCard>

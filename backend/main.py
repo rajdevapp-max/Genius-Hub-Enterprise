@@ -6,7 +6,7 @@ import os
 import zipfile
 import shutil
 import threading 
-import hashlib # 🎯 NEW: For Strict Content Hashing
+import hashlib 
 from huggingface_hub import hf_hub_download
 import pandas as pd
 from playwright.sync_api import sync_playwright
@@ -15,14 +15,13 @@ import time
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 os.environ["OMP_NUM_THREADS"] = "1"
 
-# --- CRITICAL: FORCE HUGGING FACE TO KEEP CHROME INSTALLED FOR RPA BOT ---
+# --- CRITICAL: FORCE HUGGING FACE TO KEEP CHROME INSTALLED ---
 os.system("playwright install chromium")
 os.system("playwright install-deps chromium")
 
 from dotenv import load_dotenv
 load_dotenv()
 
-# 🚀 CRITICAL: This syncs your 38K cloud database! Requires HF_TOKEN in Space Secrets.
 def sync_cloud_resumes():
     token = os.environ.get("HF_TOKEN")
     if not token:
@@ -50,7 +49,7 @@ sync_cloud_resumes()
 import json
 import re
 from typing import Optional
-from fastapi import FastAPI, UploadFile, File, HTTPException, Query, Form, BackgroundTasks, Body
+from fastapi import FastAPI, UploadFile, File, HTTPException, Query, Form, Body
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel
@@ -83,7 +82,6 @@ app.add_middleware(
 RESUME_DIR = os.environ.get("RESUME_DIR", "resumes")
 os.makedirs(RESUME_DIR, exist_ok=True)
 
-# RPA Bot Temp Directory
 TEMP_DIR = "/tmp/geniushub_resumes"
 os.makedirs(TEMP_DIR, exist_ok=True)
 
@@ -724,7 +722,7 @@ def delete_all():
 def root(): return {"status": "ok"}
 
 # ==============================================================================
-# 🚀 NAUKRI HYPER-SYNC RPA ENGINE (OTP BRIDGE INCLUDED)
+# 🚀 NAUKRI HYPER-SYNC RPA ENGINE (DOCKER-SAFE + LIVE OTP)
 # ==============================================================================
 
 naukri_bot_state = {
@@ -746,11 +744,13 @@ def submit_otp(payload: dict = Body(...)):
     naukri_bot_state["message"] = "Verifying OTP..."
     return {"status": "success"}
 
-def run_cloud_excel_bot(excel_path: str, email: str, password: str):
+# 🎯 FIX: Hard Isolation Thread to prevent FastAPI/Docker deadlocks
+def run_cloud_excel_bot_thread(excel_path: str, email: str, password: str):
     global naukri_bot_state
+    print("\n🤖 [RPA ENGINE] Boot sequence initiated...", flush=True)
     
     naukri_bot_state["status"] = "RUNNING"
-    naukri_bot_state["message"] = "Waking up Cloud Bot..."
+    naukri_bot_state["message"] = "Reading Excel Database..."
     naukri_bot_state["current"] = 0
     naukri_bot_state["total"] = 0
     naukri_bot_state["provided_otp"] = None
@@ -759,28 +759,50 @@ def run_cloud_excel_bot(excel_path: str, email: str, password: str):
         df = pd.read_excel(excel_path)
         profile_links = df['Candidate profile'].dropna().tolist()
         naukri_bot_state["total"] = len(profile_links)
+        print(f"🤖 [RPA ENGINE] Successfully mapped {len(profile_links)} candidate profiles.", flush=True)
     except Exception as e:
+        print(f"❌ [RPA ENGINE] Failed to parse Excel: {e}", flush=True)
         naukri_bot_state["status"] = "ERROR"
         naukri_bot_state["message"] = f"Excel Error: {e}"
         return
 
-    with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
-        context = browser.new_context(accept_downloads=True, user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
-        page = context.new_page()
-        
-        try:
-            naukri_bot_state["message"] = "Logging in..."
-            page.goto("https://www.naukri.com/nlogin/login")
+    try:
+        print("🤖 [RPA ENGINE] Launching Headless Chromium (Sandbox bypassed)...", flush=True)
+        with sync_playwright() as p:
+            # 🎯 FIX: These args are REQUIRED for Hugging Face Docker environments
+            browser = p.chromium.launch(
+                headless=True,
+                args=[
+                    "--no-sandbox",
+                    "--disable-setuid-sandbox",
+                    "--disable-dev-shm-usage",
+                    "--disable-gpu",
+                    "--disable-blink-features=AutomationControlled"
+                ]
+            )
+            print("🤖 [RPA ENGINE] Browser active. Masking fingerprints...", flush=True)
+            context = browser.new_context(
+                accept_downloads=True,
+                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            )
+            page = context.new_page()
+            
+            print("🤖 [RPA ENGINE] Infiltrating Naukri Login portal...", flush=True)
+            naukri_bot_state["message"] = "Logging into Naukri..."
+            page.goto("https://www.naukri.com/nlogin/login", wait_until="domcontentloaded")
+            
             page.fill("input[id='usernameField']", email)
             page.fill("input[id='passwordField']", password)
             page.click("button[type='submit']")
+            print("🤖 [RPA ENGINE] Credentials submitted. Analyzing response...", flush=True)
             
             # OTP BRIDGE CHECK
             try:
-                page.wait_for_url("**/dashboard**", timeout=6000)
+                page.wait_for_url("**/dashboard**", timeout=8000)
+                print("✅ [RPA ENGINE] Bypass Successful. Dashboard accessed.", flush=True)
                 naukri_bot_state["message"] = "Login Successful."
             except:
+                print("⚠️ [RPA ENGINE] Security Wall Hit: Naukri requires OTP.", flush=True)
                 naukri_bot_state["status"] = "AWAITING_OTP"
                 naukri_bot_state["message"] = "OTP Required! Please enter it on the dashboard."
                 
@@ -788,8 +810,11 @@ def run_cloud_excel_bot(excel_path: str, email: str, password: str):
                 while not naukri_bot_state["provided_otp"]:
                     time.sleep(2)
                     wait_time += 2
-                    if wait_time > 180: raise Exception("OTP Entry Timed Out")
+                    if wait_time > 180: 
+                        print("❌ [RPA ENGINE] Timed out waiting for human OTP.", flush=True)
+                        raise Exception("OTP Entry Timed Out (3 Minutes)")
                 
+                print(f"🤖 [RPA ENGINE] OTP Received from UI. Injecting...", flush=True)
                 naukri_bot_state["status"] = "RUNNING"
                 otp_code = naukri_bot_state["provided_otp"]
                 
@@ -798,15 +823,18 @@ def run_cloud_excel_bot(excel_path: str, email: str, password: str):
                     otp_inputs[0].fill(otp_code)
                     page.keyboard.press("Enter")
                     page.wait_for_url("**/dashboard**", timeout=15000)
+                    print("✅ [RPA ENGINE] OTP Accepted. Dashboard accessed.", flush=True)
                     naukri_bot_state["message"] = "OTP Verified! Starting extraction."
                 else:
                     raise Exception("Could not find OTP input box.")
 
             # EXTRACTION LOOP
             downloaded_files = []
+            print("🚀 [RPA ENGINE] Commencing Hyper-Speed Extraction...", flush=True)
             for index, link in enumerate(profile_links):
                 naukri_bot_state["current"] = index + 1
                 naukri_bot_state["message"] = f"Ripping Resume {index + 1} of {len(profile_links)}..."
+                print(f"   -> [FETCH] Profile {index + 1}: {link}", flush=True)
                 
                 try:
                     candidate_page = context.new_page()
@@ -819,29 +847,33 @@ def run_cloud_excel_bot(excel_path: str, email: str, password: str):
                     filepath = os.path.join(TEMP_DIR, f"candidate_{index}.pdf")
                     download.save_as(filepath)
                     downloaded_files.append(filepath)
+                    print(f"   ✅ [SUCCESS] Downloaded to {filepath}", flush=True)
                     candidate_page.close()
                 except Exception as e:
-                    print(f"Skipped Profile {index}: {e}")
+                    print(f"   ⚠️ [SKIPPED] Profile {index + 1} failed: {e}", flush=True)
                     candidate_page.close()
 
             # Push to the AI Extractor Pipeline
+            print(f"🚀 [RPA ENGINE] Moving {len(downloaded_files)} files into ForgePro Watcher pipeline...", flush=True)
             for f_path in downloaded_files:
                 shutil.copy(f_path, os.path.join(RESUME_DIR, os.path.basename(f_path)))
 
             naukri_bot_state["status"] = "SUCCESS"
             naukri_bot_state["message"] = f"✅ Extracted {len(downloaded_files)} Resumes! Models are processing them."
+            print("🏁 [RPA ENGINE] Mission Complete. Shutting down.", flush=True)
 
         except Exception as e:
+            print(f"❌ [RPA ENGINE] FATAL ERROR: {e}", flush=True)
             naukri_bot_state["status"] = "ERROR"
             naukri_bot_state["message"] = f"❌ Bot Error: {e}"
         finally:
-            browser.close()
+            if 'browser' in locals():
+                browser.close()
             if os.path.exists(excel_path):
                 os.remove(excel_path)
 
 @app.post("/api/upload-excel-sync")
 async def upload_excel_sync(
-    background_tasks: BackgroundTasks,
     file: UploadFile,
     naukri_email: str = Form(...),
     naukri_password: str = Form(...)
@@ -850,12 +882,13 @@ async def upload_excel_sync(
     with open(excel_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
         
-    background_tasks.add_task(run_cloud_excel_bot, excel_path, naukri_email, naukri_password)
+    # 🎯 FIX: Spawning a completely separate OS thread ensures Playwright doesn't freeze the FastAPI Event Loop
+    t = threading.Thread(target=run_cloud_excel_bot_thread, args=(excel_path, naukri_email, naukri_password))
+    t.daemon = True
+    t.start()
+    
     return {"status": "success", "message": "Bot deployed."}
 
-# ==============================================================================
-# END OF SCRIPT (Required by Python)
-# ==============================================================================
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=7860)
