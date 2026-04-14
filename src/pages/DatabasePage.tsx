@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Database, Trash2, AlertOctagon, Loader2, CheckSquare, Square, Eye, Activity, RefreshCw, Zap } from 'lucide-react';
+import { Database, Trash2, AlertOctagon, Loader2, CheckSquare, Square, Eye, Activity, RefreshCw, Zap, UploadCloud, FileSpreadsheet } from 'lucide-react';
 import { api } from '@/lib/api';
 import CandidateModal from '@/components/CandidateModal';
 import GlowingCard from '@/components/GlowingCard';
@@ -15,11 +15,20 @@ export default function DatabasePage() {
   const [selectedCandidate, setSelectedCandidate] = useState<any | null>(null);
   const [isWiping, setIsWiping] = useState(false);
 
-  // 🎯 NEW: Live Sync State for Naukri Integration
+  // Live Sync State
   const [liveSync, setLiveSync] = useState(false);
   const [recentImports, setRecentImports] = useState<any[]>([]);
 
+  // 🚀 NEW: Naukri CSV Upload State
+  const [showCsvUpload, setShowCsvUpload] = useState(false);
+  const [csvFile, setCsvFile] = useState<File | null>(null);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [uploadStatus, setUploadStatus] = useState('');
+  const [isUploading, setIsUploading] = useState(false);
+
   const PER_PAGE = 50;
+  const BACKEND_API_URL = "https://vinu019-resume-backend.hf.space/api/upload-csv-sync";
 
   const fetchDatabase = async (p: number) => {
     setLoading(true);
@@ -38,17 +47,15 @@ export default function DatabasePage() {
     fetchDatabase(page);
   }, [page]);
 
-  // 🎯 NEW: The Live Radar! Polls the DB every 3 seconds when activated
+  // The Live Radar
   useEffect(() => {
     let interval: any;
     if (liveSync) {
       const fetchRecent = async () => {
         try {
-          // Fetch the absolute newest 5 resumes added to the database
           const data = await api.browse({ page: 1, per_page: 5, sort_by: 'created_at', sort_order: 'desc' });
           setRecentImports(data.candidates);
           
-          // Also silently update the main total count
           const mainData = await api.browse({ page, per_page: PER_PAGE });
           setCandidates(mainData.candidates);
           setTotal(mainData.total);
@@ -57,11 +64,53 @@ export default function DatabasePage() {
         }
       };
       
-      fetchRecent(); // Fire immediately
-      interval = setInterval(fetchRecent, 3000); // Then every 3 seconds
+      fetchRecent(); 
+      interval = setInterval(fetchRecent, 3000); 
     }
     return () => clearInterval(interval);
   }, [liveSync, page]);
+
+  // 🚀 NEW: Handle CSV Submit to Hugging Face
+  const handleCsvSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!csvFile || !email || !password) {
+      setUploadStatus("⚠️ Please provide the CSV file, email, and password.");
+      return;
+    }
+
+    setIsUploading(true);
+    setUploadStatus("🚀 Deploying ForgePro Cloud Bot...");
+
+    const formData = new FormData();
+    formData.append("file", csvFile);
+    formData.append("naukri_email", email);
+    formData.append("naukri_password", password);
+
+    try {
+      const response = await fetch(BACKEND_API_URL, {
+        method: "POST",
+        body: formData,
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setUploadStatus("✅ " + data.message);
+        setCsvFile(null);
+        setEmail('');
+        setPassword('');
+        // Turn on Live Sync automatically to watch them flow in!
+        setLiveSync(true); 
+      } else {
+        setUploadStatus("❌ Error: " + data.message);
+      }
+    } catch (error) {
+      console.error("Upload error:", error);
+      setUploadStatus("❌ Failed to connect to the backend bot.");
+    } finally {
+      setIsUploading(false);
+    }
+  };
 
   const toggleSelect = (id: number) => {
     setSelectedIds(prev => {
@@ -119,7 +168,19 @@ export default function DatabasePage() {
         </div>
         
         <div className="flex items-center gap-3">
-          {/* 🎯 NEW: LIVE SYNC TOGGLE BUTTON */}
+          {/* 🚀 NEW: CSV UPLOAD TOGGLE */}
+          <button 
+            onClick={() => setShowCsvUpload(!showCsvUpload)}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl font-bold tracking-wide transition-all ${
+              showCsvUpload 
+                ? 'bg-blue-500/20 text-blue-400 border border-blue-500/50 shadow-[0_0_15px_rgba(59,130,246,0.3)]' 
+                : 'bg-secondary/50 text-muted-foreground border border-border hover:bg-secondary'
+            }`}
+          >
+            <UploadCloud className="w-4 h-4" />
+            Import Naukri CSV
+          </button>
+
           <button 
             onClick={() => setLiveSync(!liveSync)}
             className={`flex items-center gap-2 px-4 py-2 rounded-xl font-bold tracking-wide transition-all ${
@@ -142,7 +203,79 @@ export default function DatabasePage() {
         </div>
       </div>
 
-      {/* 🎯 NEW: THE LIVE RADAR PANEL */}
+      {/* 🚀 NEW: NAUKRI CSV UPLOAD PANEL */}
+      <AnimatePresence>
+        {showCsvUpload && (
+          <motion.div 
+            initial={{ opacity: 0, height: 0, y: -20 }} 
+            animate={{ opacity: 1, height: 'auto', y: 0 }} 
+            exit={{ opacity: 0, height: 0, y: -20 }}
+            className="overflow-hidden"
+          >
+            <GlowingCard className="p-6 border-blue-500/30 bg-blue-500/5 relative overflow-hidden">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 rounded-xl bg-blue-500/20 flex items-center justify-center">
+                  <FileSpreadsheet className="w-5 h-5 text-blue-400" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-foreground">Naukri Hyper-Sync Engine</h3>
+                  <p className="text-xs text-muted-foreground">Upload the exported Candidate CSV and provide credentials to start automated background fetching.</p>
+                </div>
+              </div>
+
+              <form onSubmit={handleCsvSubmit} className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+                <div className="md:col-span-1">
+                  <label className="block text-xs font-medium text-muted-foreground mb-1">Exported CSV File</label>
+                  <input 
+                    type="file" 
+                    accept=".csv"
+                    onChange={(e) => setCsvFile(e.target.files?.[0] || null)}
+                    className="w-full text-sm text-muted-foreground file:mr-3 file:py-2 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-bold file:bg-blue-600/20 file:text-blue-400 hover:file:bg-blue-600/30 cursor-pointer bg-background border border-border rounded-lg"
+                  />
+                </div>
+                <div className="md:col-span-1">
+                  <label className="block text-xs font-medium text-muted-foreground mb-1">Naukri Email</label>
+                  <input 
+                    type="email" 
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="recruiter@company.com"
+                    className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm text-foreground focus:outline-none focus:border-blue-500"
+                  />
+                </div>
+                <div className="md:col-span-1">
+                  <label className="block text-xs font-medium text-muted-foreground mb-1">Naukri Password</label>
+                  <input 
+                    type="password" 
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="••••••••"
+                    className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm text-foreground focus:outline-none focus:border-blue-500"
+                  />
+                </div>
+                <div className="md:col-span-1">
+                  <button 
+                    type="submit" 
+                    disabled={isUploading}
+                    className={`w-full py-2.5 rounded-lg font-bold text-white transition-all flex items-center justify-center gap-2 ${isUploading ? 'bg-gray-600 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-500 shadow-lg shadow-blue-500/20'}`}
+                  >
+                    {isUploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
+                    {isUploading ? 'Deploying Bot...' : 'Sync Resumes'}
+                  </button>
+                </div>
+              </form>
+
+              {uploadStatus && (
+                <div className={`mt-4 p-3 rounded-lg text-sm font-medium border ${uploadStatus.includes('✅') ? 'bg-success/10 text-success border-success/20' : uploadStatus.includes('❌') ? 'bg-destructive/10 text-destructive border-destructive/20' : 'bg-blue-500/10 text-blue-400 border-blue-500/20'}`}>
+                  {uploadStatus}
+                </div>
+              )}
+            </GlowingCard>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* THE LIVE RADAR PANEL */}
       <AnimatePresence>
         {liveSync && (
           <motion.div 
@@ -158,7 +291,7 @@ export default function DatabasePage() {
                   <Zap className="w-4 h-4 text-success animate-pulse" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-bold text-foreground">Listening for Naukri Extensions...</h3>
+                  <h3 className="text-sm font-bold text-foreground">Live Radar Active</h3>
                   <p className="text-[10px] text-muted-foreground uppercase tracking-widest">Showing newest arrivals in real-time</p>
                 </div>
               </div>

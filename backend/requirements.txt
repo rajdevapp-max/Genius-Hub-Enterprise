@@ -17,3 +17,5 @@ python-dotenv==1.0.1
 huggingface_hub
 pdfplumber
 pytesseract
+playwright
+pandas

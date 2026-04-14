@@ -754,3 +754,87 @@ def root(): return {"status": "ok"}
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=7860)
+
+from fastapi import UploadFile, Form, BackgroundTasks
+import pandas as pd
+from playwright.sync_api import sync_playwright
+import os
+import shutil
+
+TEMP_DIR = "/tmp/geniushub_resumes"
+os.makedirs(TEMP_DIR, exist_ok=True)
+
+# --- THE BOT THAT RUNS IN THE BACKGROUND ---
+def run_cloud_csv_bot(csv_path: str, email: str, password: str):
+    print("🤖 Cloud Bot Started: Reading CSV...")
+    try:
+        df = pd.read_csv(csv_path)
+        profile_links = df['Candidate profile'].dropna().tolist()
+    except Exception as e:
+        print(f"❌ CSV Error: {e}")
+        return
+
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        context = browser.new_context(accept_downloads=True)
+        page = context.new_page()
+        
+        try:
+            print("⏳ Logging into Naukri...")
+            page.goto("https://www.naukri.com/nlogin/login")
+            page.fill("input[id='usernameField']", email)
+            page.fill("input[id='passwordField']", password)
+            page.click("button[type='submit']")
+            page.wait_for_url("**/dashboard**", timeout=15000)
+            
+            downloaded_files = []
+
+            print(f"⚡ Fetching {len(profile_links)} resumes...")
+            for index, link in enumerate(profile_links):
+                try:
+                    candidate_page = context.new_page()
+                    candidate_page.goto(link)
+                    
+                    with candidate_page.expect_download(timeout=10000) as dl_info:
+                        candidate_page.locator("text=Download Resume").first.click()
+                        
+                    download = dl_info.value
+                    filepath = os.path.join(TEMP_DIR, f"candidate_{index}.pdf")
+                    download.save_as(filepath)
+                    downloaded_files.append(filepath)
+                    
+                    candidate_page.close()
+                except Exception:
+                    candidate_page.close()
+
+            print(f"✅ Successfully downloaded {len(downloaded_files)} resumes to backend!")
+            
+            # TODO: Pass the 'downloaded_files' list to your existing parsing/FAISS logic here!
+
+        except Exception as e:
+            print(f"❌ Bot Error: {e}")
+        finally:
+            browser.close()
+            if os.path.exists(csv_path):
+                os.remove(csv_path)
+
+# --- THE API ENDPOINT TO RECEIVE THE UPLOAD ---
+@app.post("/api/upload-csv-sync")
+async def upload_csv_sync(
+    background_tasks: BackgroundTasks,
+    file: UploadFile,
+    naukri_email: str = Form(...),
+    naukri_password: str = Form(...)
+):
+    # Save the CSV temporarily on the server
+    csv_path = f"/tmp/{file.filename}"
+    with open(csv_path, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+        
+    # Trigger the bot in the background so the frontend doesn't freeze
+    background_tasks.add_task(run_cloud_csv_bot, csv_path, naukri_email, naukri_password)
+    
+    return {
+        "status": "success", 
+        "message": "CSV received. Bot is fetching resumes in the background."
+    }
