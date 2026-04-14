@@ -15,18 +15,15 @@ export default function DatabasePage() {
   const [selectedCandidate, setSelectedCandidate] = useState<any | null>(null);
   const [isWiping, setIsWiping] = useState(false);
 
-  // Live Sync State
   const [liveSync, setLiveSync] = useState(false);
   const [recentImports, setRecentImports] = useState<any[]>([]);
 
-  // Naukri Excel Upload State
   const [showExcelUpload, setShowExcelUpload] = useState(false);
   const [excelFile, setExcelFile] = useState<File | null>(null);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [otpInput, setOtpInput] = useState(''); 
 
-  // Progress Tracking State
   const [progressData, setProgressData] = useState({ status: 'IDLE', current: 0, total: 0, message: '' });
 
   const PER_PAGE = 50;
@@ -49,7 +46,6 @@ export default function DatabasePage() {
     fetchDatabase(page);
   }, [page]);
 
-  // Live Radar Auto-Sync
   useEffect(() => {
     let interval: any;
     if (liveSync) {
@@ -70,7 +66,6 @@ export default function DatabasePage() {
     return () => clearInterval(interval);
   }, [liveSync, page]);
 
-  // 🚀 Poll Backend for Bot Status (Including OTP Checks)
   useEffect(() => {
     let interval: any;
     if (progressData.status === 'RUNNING' || progressData.status === 'AWAITING_OTP') {
@@ -94,7 +89,6 @@ export default function DatabasePage() {
     return () => clearInterval(interval);
   }, [progressData.status]);
 
-  // 🚀 Handle Excel + Creds Submission
   const handleExcelSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!excelFile || !email || !password) return;
@@ -116,7 +110,6 @@ export default function DatabasePage() {
     }
   };
 
-  // 🚀 Handle OTP Submission to Bot
   const handleOtpSubmit = async () => {
     if (!otpInput) return;
     try {
@@ -212,7 +205,6 @@ export default function DatabasePage() {
         </div>
       </div>
 
-      {/* 🚀 EXCEL / OTP UPLOAD PANEL */}
       <AnimatePresence>
         {showExcelUpload && (
           <motion.div 
@@ -282,7 +274,6 @@ export default function DatabasePage() {
                     </div>
                   )}
 
-                  {/* 🚀 OTP Input Bridge */}
                   {progressData.status === 'AWAITING_OTP' && (
                     <div className="mt-4 p-4 border border-warning/30 bg-warning/5 rounded-lg flex flex-col gap-3">
                       <div className="flex items-center gap-2 text-warning font-bold text-sm">
@@ -302,7 +293,6 @@ export default function DatabasePage() {
                       </div>
                     </div>
                   )}
-
                 </div>
               )}
             </GlowingCard>
