@@ -24,6 +24,7 @@ export default function DatabasePage() {
   const [password, setPassword] = useState('');
   const [otpInput, setOtpInput] = useState(''); 
 
+  // CRITICAL FIX: The UI now relies 100% on the live polling status.
   const [progressData, setProgressData] = useState({ status: 'IDLE', current: 0, total: 0, message: '' });
 
   const PER_PAGE = 50;
@@ -76,6 +77,7 @@ export default function DatabasePage() {
           setProgressData(data);
           
           if (data.status === 'SUCCESS') {
+            setExcelFile(null); // Clear form on success
             setLiveSync(true); 
             clearInterval(interval);
           } else if (data.status === 'ERROR') {
@@ -93,7 +95,7 @@ export default function DatabasePage() {
     e.preventDefault();
     if (!excelFile || !email || !password) return;
 
-    setProgressData({ status: 'RUNNING', current: 0, total: 0, message: 'Deploying Bot...' });
+    setProgressData({ status: 'RUNNING', current: 0, total: 0, message: 'Deploying Recruiter Bot...' });
 
     const formData = new FormData();
     formData.append("file", excelFile);
@@ -224,6 +226,7 @@ export default function DatabasePage() {
                 </div>
               </div>
 
+              {/* IDLE / ERROR FORM */}
               {(progressData.status === 'IDLE' || progressData.status === 'ERROR') && (
                 <form onSubmit={handleExcelSubmit} className="space-y-4">
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
@@ -252,6 +255,7 @@ export default function DatabasePage() {
                 </form>
               )}
 
+              {/* LIVE PROGRESS UI */}
               {(progressData.status === 'RUNNING' || progressData.status === 'SUCCESS' || progressData.status === 'AWAITING_OTP') && (
                 <div className="p-5 bg-gray-900/50 border border-gray-800 rounded-xl">
                   
@@ -274,6 +278,7 @@ export default function DatabasePage() {
                     </div>
                   )}
 
+                  {/* 🚀 OTP Input Bridge */}
                   {progressData.status === 'AWAITING_OTP' && (
                     <div className="mt-4 p-4 border border-warning/30 bg-warning/5 rounded-lg flex flex-col gap-3">
                       <div className="flex items-center gap-2 text-warning font-bold text-sm">
@@ -300,6 +305,7 @@ export default function DatabasePage() {
         )}
       </AnimatePresence>
 
+      {/* --- LIVE RADAR AND TABLE --- */}
       <AnimatePresence>
         {liveSync && (
           <motion.div initial={{ opacity: 0, height: 0, y: -20 }} animate={{ opacity: 1, height: 'auto', y: 0 }} exit={{ opacity: 0, height: 0, y: -20 }} className="overflow-hidden">
