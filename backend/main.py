@@ -8,8 +8,16 @@ import shutil
 import threading 
 import hashlib # 🎯 NEW: For Strict Content Hashing
 from huggingface_hub import hf_hub_download
+import pandas as pd
+from playwright.sync_api import sync_playwright
+import time
+
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 os.environ["OMP_NUM_THREADS"] = "1"
+
+# --- CRITICAL: FORCE HUGGING FACE TO KEEP CHROME INSTALLED FOR RPA BOT ---
+os.system("playwright install chromium")
+os.system("playwright install-deps chromium")
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -40,10 +48,9 @@ def sync_cloud_resumes():
 sync_cloud_resumes() 
 
 import json
-import time
 import re
 from typing import Optional
-from fastapi import FastAPI, UploadFile, File, HTTPException, Query
+from fastapi import FastAPI, UploadFile, File, HTTPException, Query, Form, BackgroundTasks, Body
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel
@@ -59,12 +66,11 @@ from extractor import process_resume, batch_process
 from classifier import classify_resume, extract_skills_regex, extract_all_skills, extract_education
 from watcher import start_watcher_thread, get_watcher_stats
 from dedup import find_duplicates, remove_duplicates, scan_folder_duplicates
-
 from model_trainer import start_ml_cron
 
 init_db()
 start_watcher_thread()
-start_ml_cron() # 🎯 The ML engine now ONLY runs via background cron, not on every upload!
+start_ml_cron() 
 
 app = FastAPI(title="Resume AI Intelligence Platform (Original)", version="48.0")
 app.add_middleware(
@@ -76,6 +82,10 @@ app.add_middleware(
 
 RESUME_DIR = os.environ.get("RESUME_DIR", "resumes")
 os.makedirs(RESUME_DIR, exist_ok=True)
+
+# RPA Bot Temp Directory
+TEMP_DIR = "/tmp/geniushub_resumes"
+os.makedirs(TEMP_DIR, exist_ok=True)
 
 GEO_MAPPING = {
     "india": ["india", "maharashtra", "mumbai", "delhi", "bangalore", "bengaluru", "karnataka", "hyderabad", "telangana", "chennai", "tamil nadu", "pune", "gurgaon", "gurugram", "noida", "up", "uttar pradesh", "gujarat", "ahmedabad", "kolkata", "rohtak", "haryana", "punjab", "chandigarh", "rajasthan", "kerala", "kochi", "trivandrum"],
@@ -155,13 +165,11 @@ def parse_dynamic_query(query: str) -> list[str]:
 def parse_universal_jd(text: str) -> list[str]:
     known_skills = extract_all_skills(text)
     edu = extract_education(text)
-    
     combined = []
     if edu: combined.append(edu)
     for sk in known_skills:
         if sk not in combined:
             combined.append(sk)
-                
     return combined[:25] 
 
 def _resume_to_dict(resume, similarity: float = 0, mandatory_skills=None, secondary_skills=None, dynamic_skills=None) -> dict:
@@ -169,21 +177,16 @@ def _resume_to_dict(resume, similarity: float = 0, mandatory_skills=None, second
     certs = json.loads(resume.certificates) if resume.certificates else []
     raw_links = json.loads(resume.hyperlinks) if resume.hyperlinks else []
     
-    # 🎯 BUG 1 FIX: Link Sanitization Engine (Prevents 404s and fixes bad LinkedIn URLs)
     cleaned_links = []
     for link in raw_links:
-        cl = re.sub(r'[.,;)\]]+$', '', link.strip()) # Strip trailing punctuation
+        cl = re.sub(r'[.,;)\]]+$', '', link.strip())
         if cl.startswith(('www.', 'linkedin.com', 'github.com')): 
             cl = 'https://' + cl
-        
-        # Fix missing /in/ path for LinkedIn (e.g. linkedin.com/vinay -> linkedin.com/in/vinay)
         match = re.search(r'(https?://(?:www\.)?linkedin\.com)/([^/]+)/?$', cl)
         if match and match.group(2).lower() not in ['in', 'company', 'school', 'jobs']:
             cl = re.sub(r'(https?://(?:www\.)?linkedin\.com)/([^/]+)/?$', r'\1/in/\2/', cl)
-            
         if cl not in cleaned_links:
             cleaned_links.append(cl)
-            
     hyperlinks = cleaned_links
     
     mandatory_skills = mandatory_skills or []
@@ -270,7 +273,6 @@ def search_resumes(req: SearchRequest):
     start = time.time()
     db = SessionLocal()
     candidates = []
-    # 🎯 THE SPEED FIX: Lower limit removes heavy lag
     FETCH_LIMIT = 250 
     try:
         original_query = req.query or ""
@@ -321,7 +323,6 @@ def search_resumes(req: SearchRequest):
         resumes_batch = db.query(Resume).filter(Resume.id.in_(all_target_ids)).all()
         resume_map = {r.id: r for r in resumes_batch}
 
-        # Pre-compile Regex logic
         compiled_mandatory = [re.compile(r'\b' + re.escape(m.lower()) + r'\b') for m in req.mandatory_skills]
         compiled_exact = [re.compile(r'\b' + re.escape(phrase.lower()) + r'\b', re.IGNORECASE) for phrase in exact_phrases]
         compiled_not = [re.compile(r'\b' + re.escape(term.lower()) + r'\b', re.IGNORECASE) for term in not_terms]
@@ -420,7 +421,6 @@ def match_jd(req: JDMatchRequest):
                     pat_exact = r'\b' + re.escape(ks.lower()) + r'\b'
                     if re.search(pat_exact, raw_text) or re.search(pat_exact, skills_text):
                         continue
-                    
                     parts = ks.lower().split()
                     if len(parts) > 1:
                         all_parts_found = True
@@ -432,10 +432,8 @@ def match_jd(req: JDMatchRequest):
                                     break
                         if all_parts_found:
                             continue
-                    
                     missing_key = True
                     break
-                
                 if missing_key: continue
 
             existing_ids.add(rid)
@@ -463,7 +461,6 @@ def match_jd(req: JDMatchRequest):
                                 pat_exact = r'\b' + re.escape(ks.lower()) + r'\b'
                                 if re.search(pat_exact, raw_text) or re.search(pat_exact, skills_text):
                                     continue
-                                
                                 parts = ks.lower().split()
                                 if len(parts) > 1:
                                     all_parts_found = True
@@ -475,10 +472,8 @@ def match_jd(req: JDMatchRequest):
                                                 break
                                     if all_parts_found:
                                         continue
-                                        
                                 missing_key = True
                                 break
-                                
                             if missing_key: continue
 
                         existing_ids.add(r.id)
@@ -553,14 +548,12 @@ def search_suggestions(q: str = Query("", min_length=1)):
         return {"names": sug["names"][:10], "skills": sug["skills"][:10], "locations": sug["locations"][:8]}
     finally: db.close()
 
-# Global Memory Cache
 STATS_CACHE = {"data": None, "last_updated": 0}
-CACHE_DURATION = 300 # 5 minutes
+CACHE_DURATION = 300 
 
 @app.get("/api/stats")
 def get_stats():
     global STATS_CACHE
-    
     if STATS_CACHE["data"] and (time.time() - STATS_CACHE["last_updated"] < CACHE_DURATION):
         return STATS_CACHE["data"]
 
@@ -572,7 +565,6 @@ def get_stats():
         
         valid_exps = [r.experience_years for r in resumes if r.experience_years is not None and r.experience_years <= 50]
         avg_exp = sum(valid_exps) / len(valid_exps) if valid_exps else 0
-        
         avg_score = sum(r.score for r in resumes) / total
         avg_words = sum(r.word_count for r in resumes) / total
         avg_pages = sum(r.page_count for r in resumes) / total
@@ -617,7 +609,6 @@ def get_stats():
         
         STATS_CACHE["data"] = result
         STATS_CACHE["last_updated"] = time.time()
-        
         return result
     finally: db.close()
 
@@ -627,28 +618,18 @@ def live_status():
     try: return {"total_resumes": db.query(Resume).count(), "indexed": resume_index.total, **get_watcher_stats()}
     finally: db.close()
 
-# 🎯 BUG 2 FIX: Strict SHA-256 Hashing blocks fake filenames!
 @app.post("/api/upload")
 async def upload_resume(file: UploadFile = File(...)):
     content = await file.read()
     file_hash = hashlib.sha256(content).hexdigest()
-    
     db = SessionLocal()
     try:
         existing = db.query(Resume).filter(Resume.file_hash == file_hash).first()
         if existing:
-            return {
-                "message": f"Duplicate Rejected: {file.filename} is identical to existing profile {existing.filename}.", 
-                "data": {"id": existing.id, "name": existing.filename}, 
-                "duplicate": True
-            }
-    finally:
-        db.close()
-        
+            return {"message": f"Duplicate Rejected: {file.filename} is identical to existing profile {existing.filename}.", "data": {"id": existing.id, "name": existing.filename}, "duplicate": True}
+    finally: db.close()
     path = os.path.join(RESUME_DIR, file.filename)
-    with open(path, "wb") as f: 
-        f.write(content)
-        
+    with open(path, "wb") as f: f.write(content)
     return {"message": "File received. AI is extracting data.", "data": {"id": 0, "name": file.filename}}
 
 @app.post("/api/upload-batch")
@@ -656,28 +637,20 @@ async def upload_batch(files: list[UploadFile] = File(...)):
     saved = []
     duplicates = 0
     db = SessionLocal()
-    
     try:
         for file in files:
             content = await file.read()
             file_hash = hashlib.sha256(content).hexdigest()
-            
             existing = db.query(Resume).filter(Resume.file_hash == file_hash).first()
             if existing:
                 duplicates += 1
                 continue
-                
             path = os.path.join(RESUME_DIR, file.filename)
-            with open(path, "wb") as f: 
-                f.write(content)
+            with open(path, "wb") as f: f.write(content)
             saved.append({"name": file.filename})
-    finally:
-        db.close()
-        
+    finally: db.close()
     msg = f"Successfully received {len(saved)} resumes. Engine extracting data."
-    if duplicates > 0:
-        msg += f" ⚠️ ({duplicates} duplicate resumes auto-rejected)."
-        
+    if duplicates > 0: msg += f" ⚠️ ({duplicates} duplicate resumes auto-rejected)."
     return {"message": msg, "results": saved}
 
 @app.post("/api/candidate/{resume_id}/delete")
@@ -712,8 +685,7 @@ def export_csv(ids: str = Query("")):
         return StreamingResponse(iter([output.getvalue()]), media_type="text/csv", headers={"Content-Disposition": "attachment; filename=candidates_export.csv"})
     finally: db.close()
 
-class DeleteBatchRequest(BaseModel):
-    ids: list[int]
+class DeleteBatchRequest(BaseModel): ids: list[int]
 
 @app.post("/api/candidates/delete-batch")
 def delete_batch(req: DeleteBatchRequest):
@@ -751,76 +723,94 @@ def delete_all():
 @app.get("/")
 def root(): return {"status": "ok"}
 
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=7860)
+# ==============================================================================
+# 🚀 NAUKRI HYPER-SYNC RPA ENGINE (OTP BRIDGE INCLUDED)
+# ==============================================================================
 
-from fastapi import UploadFile, Form, BackgroundTasks
-import pandas as pd
-from playwright.sync_api import sync_playwright
-import os
-import shutil
-
-# --- FIX: FORCE HUGGING FACE TO INSTALL CHROME ---
-os.system("playwright install chromium")
-os.system("playwright install-deps chromium")
-
-TEMP_DIR = "/tmp/geniushub_resumes"
-os.makedirs(TEMP_DIR, exist_ok=True)
-
-# --- NEW: GLOBAL PROGRESS TRACKER ---
-bot_progress = {
-    "is_running": False,
+naukri_bot_state = {
+    "status": "IDLE", 
+    "message": "Idle",
     "current": 0,
     "total": 0,
-    "message": "Idle"
+    "provided_otp": None
 }
 
 @app.get("/api/upload-progress")
 def get_upload_progress():
-    """Frontend polls this endpoint to update the progress bar"""
-    return bot_progress
+    return naukri_bot_state
 
-# --- THE BOT THAT RUNS IN THE BACKGROUND ---
+@app.post("/api/submit-otp")
+def submit_otp(payload: dict = Body(...)):
+    global naukri_bot_state
+    naukri_bot_state["provided_otp"] = payload.get("otp", "")
+    naukri_bot_state["message"] = "Verifying OTP..."
+    return {"status": "success"}
+
 def run_cloud_excel_bot(excel_path: str, email: str, password: str):
-    global bot_progress
-    bot_progress["is_running"] = True
-    bot_progress["message"] = "Reading Excel file..."
-    bot_progress["current"] = 0
-    bot_progress["total"] = 0
+    global naukri_bot_state
+    
+    naukri_bot_state["status"] = "RUNNING"
+    naukri_bot_state["message"] = "Waking up Cloud Bot..."
+    naukri_bot_state["current"] = 0
+    naukri_bot_state["total"] = 0
+    naukri_bot_state["provided_otp"] = None
     
     try:
         df = pd.read_excel(excel_path)
         profile_links = df['Candidate profile'].dropna().tolist()
-        bot_progress["total"] = len(profile_links)
+        naukri_bot_state["total"] = len(profile_links)
     except Exception as e:
-        bot_progress["message"] = f"Excel Error: {e}"
-        bot_progress["is_running"] = False
+        naukri_bot_state["status"] = "ERROR"
+        naukri_bot_state["message"] = f"Excel Error: {e}"
         return
 
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
-        context = browser.new_context(accept_downloads=True)
+        context = browser.new_context(accept_downloads=True, user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
         page = context.new_page()
         
         try:
-            bot_progress["message"] = "Bypassing Security & Logging in..."
+            naukri_bot_state["message"] = "Logging in..."
             page.goto("https://www.naukri.com/nlogin/login")
             page.fill("input[id='usernameField']", email)
             page.fill("input[id='passwordField']", password)
             page.click("button[type='submit']")
-            page.wait_for_url("**/dashboard**", timeout=15000)
             
-            downloaded_files = []
-            bot_progress["message"] = "Extracting Resumes..."
+            # OTP BRIDGE CHECK
+            try:
+                page.wait_for_url("**/dashboard**", timeout=6000)
+                naukri_bot_state["message"] = "Login Successful."
+            except:
+                naukri_bot_state["status"] = "AWAITING_OTP"
+                naukri_bot_state["message"] = "OTP Required! Please enter it on the dashboard."
+                
+                wait_time = 0
+                while not naukri_bot_state["provided_otp"]:
+                    time.sleep(2)
+                    wait_time += 2
+                    if wait_time > 180: raise Exception("OTP Entry Timed Out")
+                
+                naukri_bot_state["status"] = "RUNNING"
+                otp_code = naukri_bot_state["provided_otp"]
+                
+                otp_inputs = page.locator("input[type='text'], input[type='number']").all()
+                if otp_inputs:
+                    otp_inputs[0].fill(otp_code)
+                    page.keyboard.press("Enter")
+                    page.wait_for_url("**/dashboard**", timeout=15000)
+                    naukri_bot_state["message"] = "OTP Verified! Starting extraction."
+                else:
+                    raise Exception("Could not find OTP input box.")
 
+            # EXTRACTION LOOP
+            downloaded_files = []
             for index, link in enumerate(profile_links):
-                # Update progress for the frontend to see!
-                bot_progress["current"] = index + 1
+                naukri_bot_state["current"] = index + 1
+                naukri_bot_state["message"] = f"Ripping Resume {index + 1} of {len(profile_links)}..."
                 
                 try:
                     candidate_page = context.new_page()
-                    candidate_page.goto(link)
+                    candidate_page.goto(link, wait_until="domcontentloaded", timeout=15000)
                     
                     with candidate_page.expect_download(timeout=10000) as dl_info:
                         candidate_page.locator("text=Download Resume").first.click()
@@ -829,23 +819,26 @@ def run_cloud_excel_bot(excel_path: str, email: str, password: str):
                     filepath = os.path.join(TEMP_DIR, f"candidate_{index}.pdf")
                     download.save_as(filepath)
                     downloaded_files.append(filepath)
-                    
                     candidate_page.close()
-                except Exception:
+                except Exception as e:
+                    print(f"Skipped Profile {index}: {e}")
                     candidate_page.close()
 
-            bot_progress["message"] = "✅ Sync Complete! Pushing to Database..."
-            # TODO: Pass 'downloaded_files' to your FAISS logic here
+            # Push to the AI Extractor Pipeline
+            for f_path in downloaded_files:
+                shutil.copy(f_path, os.path.join(RESUME_DIR, os.path.basename(f_path)))
+
+            naukri_bot_state["status"] = "SUCCESS"
+            naukri_bot_state["message"] = f"✅ Extracted {len(downloaded_files)} Resumes! Models are processing them."
 
         except Exception as e:
-            bot_progress["message"] = f"❌ Bot Error: Login Timeout or Blocked"
+            naukri_bot_state["status"] = "ERROR"
+            naukri_bot_state["message"] = f"❌ Bot Error: {e}"
         finally:
             browser.close()
-            bot_progress["is_running"] = False
             if os.path.exists(excel_path):
                 os.remove(excel_path)
 
-# --- THE API ENDPOINT TO RECEIVE THE UPLOAD ---
 @app.post("/api/upload-excel-sync")
 async def upload_excel_sync(
     background_tasks: BackgroundTasks,
@@ -858,5 +851,11 @@ async def upload_excel_sync(
         shutil.copyfileobj(file.file, buffer)
         
     background_tasks.add_task(run_cloud_excel_bot, excel_path, naukri_email, naukri_password)
-    
     return {"status": "success", "message": "Bot deployed."}
+
+# ==============================================================================
+# END OF SCRIPT (Required by Python)
+# ==============================================================================
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=7860)
