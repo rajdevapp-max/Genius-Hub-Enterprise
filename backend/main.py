@@ -765,13 +765,14 @@ TEMP_DIR = "/tmp/geniushub_resumes"
 os.makedirs(TEMP_DIR, exist_ok=True)
 
 # --- THE BOT THAT RUNS IN THE BACKGROUND ---
-def run_cloud_csv_bot(csv_path: str, email: str, password: str):
-    print("🤖 Cloud Bot Started: Reading CSV...")
+def run_cloud_excel_bot(excel_path: str, email: str, password: str):
+    print("🤖 Cloud Bot Started: Reading Excel...")
     try:
-        df = pd.read_csv(csv_path)
+        # 🎯 CHANGED: Now reads Excel files!
+        df = pd.read_excel(excel_path)
         profile_links = df['Candidate profile'].dropna().tolist()
     except Exception as e:
-        print(f"❌ CSV Error: {e}")
+        print(f"❌ Excel Error: {e}")
         return
 
     with sync_playwright() as p:
@@ -809,32 +810,32 @@ def run_cloud_csv_bot(csv_path: str, email: str, password: str):
 
             print(f"✅ Successfully downloaded {len(downloaded_files)} resumes to backend!")
             
-            # TODO: Pass the 'downloaded_files' list to your existing parsing/FAISS logic here!
+            # TODO: Pass the 'downloaded_files' list to your existing FAISS logic here
 
         except Exception as e:
             print(f"❌ Bot Error: {e}")
         finally:
             browser.close()
-            if os.path.exists(csv_path):
-                os.remove(csv_path)
+            if os.path.exists(excel_path):
+                os.remove(excel_path)
 
 # --- THE API ENDPOINT TO RECEIVE THE UPLOAD ---
-@app.post("/api/upload-csv-sync")
-async def upload_csv_sync(
+@app.post("/api/upload-excel-sync")
+async def upload_excel_sync(
     background_tasks: BackgroundTasks,
     file: UploadFile,
     naukri_email: str = Form(...),
     naukri_password: str = Form(...)
 ):
-    # Save the CSV temporarily on the server
-    csv_path = f"/tmp/{file.filename}"
-    with open(csv_path, "wb") as buffer:
+    # Save the Excel temporarily on the server
+    excel_path = f"/tmp/{file.filename}"
+    with open(excel_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
         
-    # Trigger the bot in the background so the frontend doesn't freeze
-    background_tasks.add_task(run_cloud_csv_bot, csv_path, naukri_email, naukri_password)
+    # Trigger the bot in the background
+    background_tasks.add_task(run_cloud_excel_bot, excel_path, naukri_email, naukri_password)
     
     return {
         "status": "success", 
-        "message": "CSV received. Bot is fetching resumes in the background."
+        "message": "Excel received. Bot is fetching resumes in the background."
     }

@@ -19,16 +19,17 @@ export default function DatabasePage() {
   const [liveSync, setLiveSync] = useState(false);
   const [recentImports, setRecentImports] = useState<any[]>([]);
 
-  // 🚀 NEW: Naukri CSV Upload State
-  const [showCsvUpload, setShowCsvUpload] = useState(false);
-  const [csvFile, setCsvFile] = useState<File | null>(null);
+  // 🚀 UPDATED: Naukri Excel Upload State
+  const [showExcelUpload, setShowExcelUpload] = useState(false);
+  const [excelFile, setExcelFile] = useState<File | null>(null);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [uploadStatus, setUploadStatus] = useState('');
   const [isUploading, setIsUploading] = useState(false);
 
   const PER_PAGE = 50;
-  const BACKEND_API_URL = "https://vinu019-resume-backend.hf.space/api/upload-csv-sync";
+  // 🎯 CHANGED: Updated to point to the new Excel endpoint
+  const BACKEND_API_URL = "https://vinu019-resume-backend.hf.space/api/upload-excel-sync";
 
   const fetchDatabase = async (p: number) => {
     setLoading(true);
@@ -70,11 +71,11 @@ export default function DatabasePage() {
     return () => clearInterval(interval);
   }, [liveSync, page]);
 
-  // 🚀 NEW: Handle CSV Submit to Hugging Face
-  const handleCsvSubmit = async (e: React.FormEvent) => {
+  // 🚀 Handle Excel Submit
+  const handleExcelSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!csvFile || !email || !password) {
-      setUploadStatus("⚠️ Please provide the CSV file, email, and password.");
+    if (!excelFile || !email || !password) {
+      setUploadStatus("⚠️ Please provide the Excel file, email, and password.");
       return;
     }
 
@@ -82,7 +83,7 @@ export default function DatabasePage() {
     setUploadStatus("🚀 Deploying ForgePro Cloud Bot...");
 
     const formData = new FormData();
-    formData.append("file", csvFile);
+    formData.append("file", excelFile);
     formData.append("naukri_email", email);
     formData.append("naukri_password", password);
 
@@ -96,7 +97,7 @@ export default function DatabasePage() {
 
       if (response.ok) {
         setUploadStatus("✅ " + data.message);
-        setCsvFile(null);
+        setExcelFile(null);
         setEmail('');
         setPassword('');
         // Turn on Live Sync automatically to watch them flow in!
@@ -168,17 +169,17 @@ export default function DatabasePage() {
         </div>
         
         <div className="flex items-center gap-3">
-          {/* 🚀 NEW: CSV UPLOAD TOGGLE */}
+          {/* 🚀 CHANGED: Button text to Excel */}
           <button 
-            onClick={() => setShowCsvUpload(!showCsvUpload)}
+            onClick={() => setShowExcelUpload(!showExcelUpload)}
             className={`flex items-center gap-2 px-4 py-2 rounded-xl font-bold tracking-wide transition-all ${
-              showCsvUpload 
+              showExcelUpload 
                 ? 'bg-blue-500/20 text-blue-400 border border-blue-500/50 shadow-[0_0_15px_rgba(59,130,246,0.3)]' 
                 : 'bg-secondary/50 text-muted-foreground border border-border hover:bg-secondary'
             }`}
           >
             <UploadCloud className="w-4 h-4" />
-            Import Naukri CSV
+            Import Naukri Excel
           </button>
 
           <button 
@@ -203,9 +204,9 @@ export default function DatabasePage() {
         </div>
       </div>
 
-      {/* 🚀 NEW: NAUKRI CSV UPLOAD PANEL */}
+      {/* 🚀 THE EXCEL UPLOAD PANEL */}
       <AnimatePresence>
-        {showCsvUpload && (
+        {showExcelUpload && (
           <motion.div 
             initial={{ opacity: 0, height: 0, y: -20 }} 
             animate={{ opacity: 1, height: 'auto', y: 0 }} 
@@ -219,17 +220,18 @@ export default function DatabasePage() {
                 </div>
                 <div>
                   <h3 className="text-lg font-bold text-foreground">Naukri Hyper-Sync Engine</h3>
-                  <p className="text-xs text-muted-foreground">Upload the exported Candidate CSV and provide credentials to start automated background fetching.</p>
+                  <p className="text-xs text-muted-foreground">Upload the exported Excel (.xlsx) and provide credentials to start automated background fetching.</p>
                 </div>
               </div>
 
-              <form onSubmit={handleCsvSubmit} className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+              <form onSubmit={handleExcelSubmit} className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
                 <div className="md:col-span-1">
-                  <label className="block text-xs font-medium text-muted-foreground mb-1">Exported CSV File</label>
+                  <label className="block text-xs font-medium text-muted-foreground mb-1">Exported Excel File</label>
+                  {/* 🎯 CHANGED: Accepts Excel formats */}
                   <input 
                     type="file" 
-                    accept=".csv"
-                    onChange={(e) => setCsvFile(e.target.files?.[0] || null)}
+                    accept=".xlsx, .xls"
+                    onChange={(e) => setExcelFile(e.target.files?.[0] || null)}
                     className="w-full text-sm text-muted-foreground file:mr-3 file:py-2 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-bold file:bg-blue-600/20 file:text-blue-400 hover:file:bg-blue-600/30 cursor-pointer bg-background border border-border rounded-lg"
                   />
                 </div>

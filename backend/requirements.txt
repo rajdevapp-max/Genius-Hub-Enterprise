@@ -19,3 +19,5 @@ pdfplumber
 pytesseract
 playwright
 pandas
+openpyxl
+python-multipart
