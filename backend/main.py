@@ -7,7 +7,7 @@ import zipfile
 import shutil
 import threading 
 import hashlib # 🎯 NEW: For Strict Content Hashing
-
+from huggingface_hub import hf_hub_download
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 os.environ["OMP_NUM_THREADS"] = "1"
 
