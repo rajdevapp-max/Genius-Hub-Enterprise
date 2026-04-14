@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Database, Trash2, AlertOctagon, Loader2, CheckSquare, Square, Eye, Activity, RefreshCw, Zap, UploadCloud, FileSpreadsheet, KeyRound } from 'lucide-react';
+import { Database, Trash2, AlertOctagon, Loader2, CheckSquare, Square, Eye, Activity, RefreshCw, Zap, UploadCloud, FileSpreadsheet, KeyRound, ShieldAlert } from 'lucide-react';
 import { api } from '@/lib/api';
 import CandidateModal from '@/components/CandidateModal';
 import GlowingCard from '@/components/GlowingCard';
@@ -22,9 +22,12 @@ export default function DatabasePage() {
   const [excelFile, setExcelFile] = useState<File | null>(null);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [naukriCookie, setNaukriCookie] = useState(''); 
   const [otpInput, setOtpInput] = useState(''); 
+  
+  // GENIUS MODE TOGGLE
+  const [syncMode, setSyncMode] = useState<'OTP' | 'COOKIE'>('OTP');
 
-  // CRITICAL FIX: The UI now relies 100% on the live polling status.
   const [progressData, setProgressData] = useState({ status: 'IDLE', current: 0, total: 0, message: '' });
 
   const PER_PAGE = 50;
@@ -77,7 +80,7 @@ export default function DatabasePage() {
           setProgressData(data);
           
           if (data.status === 'SUCCESS') {
-            setExcelFile(null); // Clear form on success
+            setExcelFile(null); 
             setLiveSync(true); 
             clearInterval(interval);
           } else if (data.status === 'ERROR') {
@@ -93,14 +96,17 @@ export default function DatabasePage() {
 
   const handleExcelSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!excelFile || !email || !password) return;
+    if (!excelFile || !email) return;
+    if (syncMode === 'OTP' && !password) return;
+    if (syncMode === 'COOKIE' && !naukriCookie) return;
 
-    setProgressData({ status: 'RUNNING', current: 0, total: 0, message: 'Deploying Recruiter Bot...' });
+    setProgressData({ status: 'RUNNING', current: 0, total: 0, message: 'Deploying GeniusHub Cloud Bot...' });
 
     const formData = new FormData();
     formData.append("file", excelFile);
     formData.append("naukri_email", email);
-    formData.append("naukri_password", password);
+    formData.append("naukri_password", syncMode === 'OTP' ? password : '');
+    formData.append("naukri_cookie", syncMode === 'COOKIE' ? naukriCookie : '');
 
     try {
       await fetch(`${BACKEND_BASE_URL}/api/upload-excel-sync`, {
@@ -221,41 +227,60 @@ export default function DatabasePage() {
                   <FileSpreadsheet className="w-5 h-5 text-blue-400" />
                 </div>
                 <div>
-                  <h3 className="text-lg font-bold text-foreground">Naukri Hyper-Sync Engine</h3>
+                  <h3 className="text-lg font-bold text-foreground">GeniusHub Hyper-Sync</h3>
                   <p className="text-xs text-muted-foreground">Automatically extract resumes from Candidate Profile hyperlinks.</p>
                 </div>
               </div>
 
-              {/* IDLE / ERROR FORM */}
               {(progressData.status === 'IDLE' || progressData.status === 'ERROR') && (
-                <form onSubmit={handleExcelSubmit} className="space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
-                    <div>
-                      <label className="block text-xs font-medium text-muted-foreground mb-1">Exported Excel File</label>
-                      <input type="file" accept=".xlsx, .xls" onChange={(e) => setExcelFile(e.target.files?.[0] || null)} className="w-full text-sm text-muted-foreground file:mr-3 file:py-2 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-bold file:bg-blue-600/20 file:text-blue-400 cursor-pointer bg-background border border-border rounded-lg" required />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium text-muted-foreground mb-1">Recruiter Email</label>
-                      <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="recruiter@company.com" className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm text-foreground focus:outline-none focus:border-blue-500" required />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium text-muted-foreground mb-1">Password</label>
-                      <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm text-foreground focus:outline-none focus:border-blue-500" required />
-                    </div>
+                <div className="space-y-4">
+                  {/* GENIUS APPROACH 2: Dual Mode Toggle */}
+                  <div className="flex bg-background border border-border p-1 rounded-lg">
+                    <button type="button" onClick={() => setSyncMode('OTP')} className={`flex-1 py-2 text-xs font-bold rounded-md transition-all ${syncMode === 'OTP' ? 'bg-blue-600 text-white shadow-md' : 'text-muted-foreground hover:text-foreground'}`}>Standard Login (OTP)</button>
+                    <button type="button" onClick={() => setSyncMode('COOKIE')} className={`flex-1 py-2 text-xs font-bold rounded-md transition-all flex items-center justify-center gap-2 ${syncMode === 'COOKIE' ? 'bg-destructive/80 text-white shadow-md' : 'text-muted-foreground hover:text-foreground'}`}><ShieldAlert className="w-3.5 h-3.5"/> God-Mode (WAF Bypass)</button>
                   </div>
-                  <button type="submit" className="w-full py-2.5 rounded-lg font-bold text-white bg-blue-600 hover:bg-blue-500 transition-all flex items-center justify-center gap-2 shadow-lg shadow-blue-500/20">
-                    <Zap className="w-4 h-4" /> Start Hyper-Sync
-                  </button>
-                  
-                  {progressData.status === 'ERROR' && (
-                    <div className="mt-2 p-3 bg-destructive/10 text-destructive text-sm rounded-lg border border-destructive/20">
-                      {progressData.message}
+
+                  <form onSubmit={handleExcelSubmit} className="space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-xs font-medium text-muted-foreground mb-1">Exported Excel File</label>
+                        <input type="file" accept=".xlsx, .xls" onChange={(e) => setExcelFile(e.target.files?.[0] || null)} className="w-full text-sm text-muted-foreground file:mr-3 file:py-2 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-bold file:bg-blue-600/20 file:text-blue-400 cursor-pointer bg-background border border-border rounded-lg" required />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-muted-foreground mb-1">Recruiter Email</label>
+                        <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="recruiter@company.com" className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm text-foreground focus:outline-none focus:border-blue-500" required />
+                      </div>
                     </div>
-                  )}
-                </form>
+
+                    <AnimatePresence mode="wait">
+                      {syncMode === 'OTP' ? (
+                        <motion.div key="otp" initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}>
+                          <label className="block text-xs font-medium text-muted-foreground mb-1">Password</label>
+                          <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm text-foreground focus:outline-none focus:border-blue-500" required={syncMode === 'OTP'} />
+                        </motion.div>
+                      ) : (
+                        <motion.div key="cookie" initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}>
+                          <label className="block text-xs font-medium text-muted-foreground mb-1">
+                            Naukri Session Cookie <span className="text-blue-400 italic font-normal">(Login to Naukri &gt; F12 &gt; Console &gt; Type `document.cookie` &gt; Copy result)</span>
+                          </label>
+                          <textarea value={naukriCookie} onChange={(e) => setNaukriCookie(e.target.value)} placeholder="Paste your raw document.cookie string here..." rows={2} className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm text-foreground focus:outline-none focus:border-blue-500 font-mono text-[10px]" required={syncMode === 'COOKIE'} />
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+
+                    <button type="submit" className={`w-full py-2.5 rounded-lg font-bold text-white transition-all flex items-center justify-center gap-2 shadow-lg ${syncMode === 'COOKIE' ? 'bg-destructive hover:bg-destructive/80 shadow-destructive/20' : 'bg-blue-600 hover:bg-blue-500 shadow-blue-500/20'}`}>
+                      <Zap className="w-4 h-4" /> Start {syncMode === 'COOKIE' ? 'God-Mode Bypass' : 'Hyper-Sync'}
+                    </button>
+                    
+                    {progressData.status === 'ERROR' && (
+                      <div className="mt-2 p-3 bg-destructive/10 text-destructive text-sm rounded-lg border border-destructive/20">
+                        {progressData.message}
+                      </div>
+                    )}
+                  </form>
+                </div>
               )}
 
-              {/* LIVE PROGRESS UI */}
               {(progressData.status === 'RUNNING' || progressData.status === 'SUCCESS' || progressData.status === 'AWAITING_OTP') && (
                 <div className="p-5 bg-gray-900/50 border border-gray-800 rounded-xl">
                   
@@ -278,7 +303,6 @@ export default function DatabasePage() {
                     </div>
                   )}
 
-                  {/* 🚀 OTP Input Bridge */}
                   {progressData.status === 'AWAITING_OTP' && (
                     <div className="mt-4 p-4 border border-warning/30 bg-warning/5 rounded-lg flex flex-col gap-3">
                       <div className="flex items-center gap-2 text-warning font-bold text-sm">
@@ -305,7 +329,6 @@ export default function DatabasePage() {
         )}
       </AnimatePresence>
 
-      {/* --- LIVE RADAR AND TABLE --- */}
       <AnimatePresence>
         {liveSync && (
           <motion.div initial={{ opacity: 0, height: 0, y: -20 }} animate={{ opacity: 1, height: 'auto', y: 0 }} exit={{ opacity: 0, height: 0, y: -20 }} className="overflow-hidden">
