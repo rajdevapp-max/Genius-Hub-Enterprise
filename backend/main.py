@@ -1,5 +1,5 @@
 """
-main.py — ORIGINAL SPACE VERSION (V48.0)
+main.py — GENIUSHUB ORIGINAL SPACE VERSION
 Features: SHA-256 Strict Deduplication, LinkedIn URL Sanitization, Fast Analytics Cache, and Hyper-Speed Regex Search.
 """
 import os
@@ -8,16 +8,10 @@ import shutil
 import threading 
 import hashlib 
 from huggingface_hub import hf_hub_download
-import pandas as pd
-from playwright.sync_api import sync_playwright
 import time
 
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 os.environ["OMP_NUM_THREADS"] = "1"
-
-# --- CRITICAL: FORCE HUGGING FACE TO KEEP CHROME INSTALLED ---
-os.system("playwright install chromium")
-os.system("playwright install-deps chromium")
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -49,7 +43,7 @@ sync_cloud_resumes()
 import json
 import re
 from typing import Optional
-from fastapi import FastAPI, UploadFile, File, HTTPException, Query, Form, Body
+from fastapi import FastAPI, UploadFile, File, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel
@@ -71,7 +65,7 @@ init_db()
 start_watcher_thread()
 start_ml_cron() 
 
-app = FastAPI(title="Resume AI Intelligence Platform (Original)", version="48.0")
+app = FastAPI(title="GeniusHub Intelligence Platform", version="48.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -81,9 +75,6 @@ app.add_middleware(
 
 RESUME_DIR = os.environ.get("RESUME_DIR", "resumes")
 os.makedirs(RESUME_DIR, exist_ok=True)
-
-TEMP_DIR = "/tmp/geniushub_resumes"
-os.makedirs(TEMP_DIR, exist_ok=True)
 
 GEO_MAPPING = {
     "india": ["india", "maharashtra", "mumbai", "delhi", "bangalore", "bengaluru", "karnataka", "hyderabad", "telangana", "chennai", "tamil nadu", "pune", "gurgaon", "gurugram", "noida", "up", "uttar pradesh", "gujarat", "ahmedabad", "kolkata", "rohtak", "haryana", "punjab", "chandigarh", "rajasthan", "kerala", "kochi", "trivandrum"],
@@ -624,12 +615,13 @@ async def upload_resume(file: UploadFile = File(...)):
     try:
         existing = db.query(Resume).filter(Resume.file_hash == file_hash).first()
         if existing:
-            return {"message": f"Duplicate Rejected: {file.filename} is identical to existing profile {existing.filename}.", "data": {"id": existing.id, "name": existing.filename}, "duplicate": True}
+            return {"message": f"Duplicate Rejected.", "data": {"id": existing.id, "name": existing.filename}, "duplicate": True}
     finally: db.close()
     path = os.path.join(RESUME_DIR, file.filename)
     with open(path, "wb") as f: f.write(content)
-    return {"message": "File received. AI is extracting data.", "data": {"id": 0, "name": file.filename}}
+    return {"message": "File received.", "data": {"id": 0, "name": file.filename}}
 
+# 🚀 THIS IS THE ENDPOINT THE CHROME EXTENSION CALLS
 @app.post("/api/upload-batch")
 async def upload_batch(files: list[UploadFile] = File(...)):
     saved = []
@@ -696,9 +688,6 @@ def delete_batch(req: DeleteBatchRequest):
                 try: os.remove(file_path)
                 except: pass
             db.delete(r)
-            if hasattr(resume_index, 'remove'):
-                try: resume_index.remove(r.id)
-                except: pass
         db.commit()
         return {"message": f"Successfully deleted {len(resumes)} profiles."}
     finally: db.close()
@@ -720,174 +709,6 @@ def delete_all():
 
 @app.get("/")
 def root(): return {"status": "ok"}
-
-# ==============================================================================
-# 🚀 NAUKRI HYPER-SYNC RPA ENGINE (DOCKER-SAFE + LIVE OTP)
-# ==============================================================================
-
-naukri_bot_state = {
-    "status": "IDLE", 
-    "message": "Idle",
-    "current": 0,
-    "total": 0,
-    "provided_otp": None
-}
-
-@app.get("/api/upload-progress")
-def get_upload_progress():
-    return naukri_bot_state
-
-@app.post("/api/submit-otp")
-def submit_otp(payload: dict = Body(...)):
-    global naukri_bot_state
-    naukri_bot_state["provided_otp"] = payload.get("otp", "")
-    naukri_bot_state["message"] = "Verifying OTP..."
-    return {"status": "success"}
-
-# 🎯 FIX: Hard Isolation Thread to prevent FastAPI/Docker deadlocks
-def run_cloud_excel_bot_thread(excel_path: str, email: str, password: str):
-    global naukri_bot_state
-    print("\n🤖 [RPA ENGINE] Boot sequence initiated...", flush=True)
-    
-    naukri_bot_state["status"] = "RUNNING"
-    naukri_bot_state["message"] = "Reading Excel Database..."
-    naukri_bot_state["current"] = 0
-    naukri_bot_state["total"] = 0
-    naukri_bot_state["provided_otp"] = None
-    
-    try:
-        df = pd.read_excel(excel_path)
-        profile_links = df['Candidate profile'].dropna().tolist()
-        naukri_bot_state["total"] = len(profile_links)
-        print(f"🤖 [RPA ENGINE] Successfully mapped {len(profile_links)} candidate profiles.", flush=True)
-    except Exception as e:
-        print(f"❌ [RPA ENGINE] Failed to parse Excel: {e}", flush=True)
-        naukri_bot_state["status"] = "ERROR"
-        naukri_bot_state["message"] = f"Excel Error: {e}"
-        return
-
-    try:
-        print("🤖 [RPA ENGINE] Launching Headless Chromium (Sandbox bypassed)...", flush=True)
-        with sync_playwright() as p:
-            # 🎯 FIX: These args are REQUIRED for Hugging Face Docker environments
-            browser = p.chromium.launch(
-                headless=True,
-                args=[
-                    "--no-sandbox",
-                    "--disable-setuid-sandbox",
-                    "--disable-dev-shm-usage",
-                    "--disable-gpu",
-                    "--disable-blink-features=AutomationControlled"
-                ]
-            )
-            print("🤖 [RPA ENGINE] Browser active. Masking fingerprints...", flush=True)
-            context = browser.new_context(
-                accept_downloads=True,
-                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-            )
-            page = context.new_page()
-            
-            print("🤖 [RPA ENGINE] Infiltrating Naukri Login portal...", flush=True)
-            naukri_bot_state["message"] = "Logging into Naukri..."
-            page.goto("https://www.naukri.com/nlogin/login", wait_until="domcontentloaded")
-            
-            page.fill("input[id='usernameField']", email)
-            page.fill("input[id='passwordField']", password)
-            page.click("button[type='submit']")
-            print("🤖 [RPA ENGINE] Credentials submitted. Analyzing response...", flush=True)
-            
-            # OTP BRIDGE CHECK
-            try:
-                page.wait_for_url("**/dashboard**", timeout=8000)
-                print("✅ [RPA ENGINE] Bypass Successful. Dashboard accessed.", flush=True)
-                naukri_bot_state["message"] = "Login Successful."
-            except:
-                print("⚠️ [RPA ENGINE] Security Wall Hit: Naukri requires OTP.", flush=True)
-                naukri_bot_state["status"] = "AWAITING_OTP"
-                naukri_bot_state["message"] = "OTP Required! Please enter it on the dashboard."
-                
-                wait_time = 0
-                while not naukri_bot_state["provided_otp"]:
-                    time.sleep(2)
-                    wait_time += 2
-                    if wait_time > 180: 
-                        print("❌ [RPA ENGINE] Timed out waiting for human OTP.", flush=True)
-                        raise Exception("OTP Entry Timed Out (3 Minutes)")
-                
-                print(f"🤖 [RPA ENGINE] OTP Received from UI. Injecting...", flush=True)
-                naukri_bot_state["status"] = "RUNNING"
-                otp_code = naukri_bot_state["provided_otp"]
-                
-                otp_inputs = page.locator("input[type='text'], input[type='number']").all()
-                if otp_inputs:
-                    otp_inputs[0].fill(otp_code)
-                    page.keyboard.press("Enter")
-                    page.wait_for_url("**/dashboard**", timeout=15000)
-                    print("✅ [RPA ENGINE] OTP Accepted. Dashboard accessed.", flush=True)
-                    naukri_bot_state["message"] = "OTP Verified! Starting extraction."
-                else:
-                    raise Exception("Could not find OTP input box.")
-
-            # EXTRACTION LOOP
-            downloaded_files = []
-            print("🚀 [RPA ENGINE] Commencing Hyper-Speed Extraction...", flush=True)
-            for index, link in enumerate(profile_links):
-                naukri_bot_state["current"] = index + 1
-                naukri_bot_state["message"] = f"Ripping Resume {index + 1} of {len(profile_links)}..."
-                print(f"   -> [FETCH] Profile {index + 1}: {link}", flush=True)
-                
-                try:
-                    candidate_page = context.new_page()
-                    candidate_page.goto(link, wait_until="domcontentloaded", timeout=15000)
-                    
-                    with candidate_page.expect_download(timeout=10000) as dl_info:
-                        candidate_page.locator("text=Download Resume").first.click()
-                        
-                    download = dl_info.value
-                    filepath = os.path.join(TEMP_DIR, f"candidate_{index}.pdf")
-                    download.save_as(filepath)
-                    downloaded_files.append(filepath)
-                    print(f"   ✅ [SUCCESS] Downloaded to {filepath}", flush=True)
-                    candidate_page.close()
-                except Exception as e:
-                    print(f"   ⚠️ [SKIPPED] Profile {index + 1} failed: {e}", flush=True)
-                    candidate_page.close()
-
-            # Push to the AI Extractor Pipeline
-            print(f"🚀 [RPA ENGINE] Moving {len(downloaded_files)} files into ForgePro Watcher pipeline...", flush=True)
-            for f_path in downloaded_files:
-                shutil.copy(f_path, os.path.join(RESUME_DIR, os.path.basename(f_path)))
-
-            naukri_bot_state["status"] = "SUCCESS"
-            naukri_bot_state["message"] = f"✅ Extracted {len(downloaded_files)} Resumes! Models are processing them."
-            print("🏁 [RPA ENGINE] Mission Complete. Shutting down.", flush=True)
-
-        except Exception as e:
-            print(f"❌ [RPA ENGINE] FATAL ERROR: {e}", flush=True)
-            naukri_bot_state["status"] = "ERROR"
-            naukri_bot_state["message"] = f"❌ Bot Error: {e}"
-        finally:
-            if 'browser' in locals():
-                browser.close()
-            if os.path.exists(excel_path):
-                os.remove(excel_path)
-
-@app.post("/api/upload-excel-sync")
-async def upload_excel_sync(
-    file: UploadFile,
-    naukri_email: str = Form(...),
-    naukri_password: str = Form(...)
-):
-    excel_path = f"/tmp/{file.filename}"
-    with open(excel_path, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
-        
-    # 🎯 FIX: Spawning a completely separate OS thread ensures Playwright doesn't freeze the FastAPI Event Loop
-    t = threading.Thread(target=run_cloud_excel_bot_thread, args=(excel_path, naukri_email, naukri_password))
-    t.daemon = True
-    t.start()
-    
-    return {"status": "success", "message": "Bot deployed."}
 
 if __name__ == "__main__":
     import uvicorn
