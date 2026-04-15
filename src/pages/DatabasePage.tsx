@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Database, Trash2, AlertOctagon, Loader2, CheckSquare, Square, Eye, Activity, RefreshCw, Zap, FileSpreadsheet } from 'lucide-react';
+import { Database, Trash2, AlertOctagon, Loader2, CheckSquare, Square, Eye, RefreshCw } from 'lucide-react';
 import { api } from '@/lib/api';
 import CandidateModal from '@/components/CandidateModal';
 import GlowingCard from '@/components/GlowingCard';
@@ -15,15 +15,7 @@ export default function DatabasePage() {
   const [selectedCandidate, setSelectedCandidate] = useState<any | null>(null);
   const [isWiping, setIsWiping] = useState(false);
 
-  const [liveSync, setLiveSync] = useState(true); 
-
-  const [showExcelUpload, setShowExcelUpload] = useState(false);
-  const [excelFile, setExcelFile] = useState<File | null>(null);
-
-  const [progressData, setProgressData] = useState({ status: 'IDLE', current: 0, total: 0, message: '' });
-
   const PER_PAGE = 50;
-  const BACKEND_BASE_URL = "https://vinu019-resume-backend.hf.space";
 
   const fetchDatabase = async (p: number) => {
     setLoading(true);
@@ -41,74 +33,6 @@ export default function DatabasePage() {
   useEffect(() => {
     fetchDatabase(page);
   }, [page]);
-
-  useEffect(() => {
-    let interval: any;
-    if (liveSync) {
-      const fetchRecent = async () => {
-        try {
-          const mainData = await api.browse({ page, per_page: PER_PAGE });
-          setCandidates(mainData.candidates);
-          setTotal(mainData.total);
-        } catch (e) {}
-      };
-      fetchRecent(); 
-      interval = setInterval(fetchRecent, 3000); 
-    }
-    return () => clearInterval(interval);
-  }, [liveSync, page]);
-
-  // 🚀 LISTEN FOR PROGRESS FROM CHROME EXTENSION
-  useEffect(() => {
-    const handleMessage = (event: MessageEvent) => {
-        if (event.data?.action === "GENIUSHUB_PROGRESS_UPDATE") {
-            const p = event.data.payload;
-            setProgressData({
-                status: p.done ? 'SUCCESS' : 'RUNNING',
-                current: p.current,
-                total: p.total,
-                message: p.message
-            });
-            if (p.done) {
-                setLiveSync(true);
-                setExcelFile(null); // Reset form
-            }
-        }
-    };
-    window.addEventListener("message", handleMessage);
-    return () => window.removeEventListener("message", handleMessage);
-  }, []);
-
-  // 🚀 UPLOAD EXCEL AND HANDOFF TO EXTENSION
-  const handleExcelSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!excelFile) return;
-
-    setProgressData({ status: 'RUNNING', current: 0, total: 0, message: 'Extracting candidate links from Excel...' });
-
-    const formData = new FormData();
-    formData.append("file", excelFile);
-
-    try {
-      // 1. Send Excel to backend to extract the URLs via Pandas
-      const res = await fetch(`${BACKEND_BASE_URL}/api/extract-excel-links`, {
-        method: "POST",
-        body: formData,
-      });
-      const data = await res.json();
-      
-      if (data.status === "success" && data.links && data.links.length > 0) {
-          setProgressData({ status: 'RUNNING', current: 0, total: data.links.length, message: 'Handing over to local GeniusHub Extension...' });
-          
-          // 2. Dispatch the silent command to the Chrome Extension
-          window.postMessage({ action: "GENIUSHUB_START_SYNC", links: data.links }, "*");
-      } else {
-          setProgressData({ status: 'ERROR', current: 0, total: 0, message: data.message || '❌ No valid profile links found in Excel.' });
-      }
-    } catch (error) {
-      setProgressData({ status: 'ERROR', current: 0, total: 0, message: '❌ Failed to connect to backend extraction API.' });
-    }
-  };
 
   const toggleSelect = (id: number) => {
     setSelectedIds(prev => {
@@ -166,94 +90,21 @@ export default function DatabasePage() {
         
         <div className="flex items-center gap-3">
           <button 
-            onClick={() => setShowExcelUpload(!showExcelUpload)}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl font-bold tracking-wide transition-all ${
-              showExcelUpload 
-                ? 'bg-blue-500/20 text-blue-400 border border-blue-500/50 shadow-[0_0_15px_rgba(59,130,246,0.3)]' 
-                : 'bg-secondary/50 text-muted-foreground border border-border hover:bg-secondary'
-            }`}
+            onClick={() => fetchDatabase(page)}
+            className="flex items-center gap-2 px-4 py-2 bg-secondary/50 text-muted-foreground border border-border hover:bg-secondary rounded-xl font-bold tracking-wide transition-all"
           >
-            <FileSpreadsheet className="w-4 h-4" /> Import Naukri Excel
+            <RefreshCw className="w-4 h-4" /> Refresh Database
           </button>
 
           <button 
-            onClick={() => setLiveSync(!liveSync)}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl font-bold tracking-wide transition-all ${
-              liveSync 
-                ? 'bg-success/20 text-success border border-success/50 shadow-[0_0_15px_rgba(16,185,129,0.3)]' 
-                : 'bg-secondary/50 text-muted-foreground border border-border hover:bg-secondary'
-            }`}
+            onClick={handleNuclearWipe} 
+            disabled={isWiping || total === 0}
+            className="btn-ghost-glow !text-destructive !border-destructive/30 hover:!bg-destructive/10 flex items-center gap-2 disabled:opacity-50"
           >
-            {liveSync ? <Activity className="w-4 h-4 animate-pulse" /> : <RefreshCw className="w-4 h-4" />}
-            {liveSync ? 'Live Sync Active' : 'Start Live Sync'}
+            {isWiping ? <Loader2 className="w-4 h-4 animate-spin" /> : <AlertOctagon className="w-4 h-4" />} Wipe Database
           </button>
         </div>
       </div>
-
-      <AnimatePresence>
-        {showExcelUpload && (
-          <motion.div 
-            initial={{ opacity: 0, height: 0, y: -20 }} 
-            animate={{ opacity: 1, height: 'auto', y: 0 }} 
-            exit={{ opacity: 0, height: 0, y: -20 }}
-            className="overflow-hidden"
-          >
-            <GlowingCard className="p-6 border-blue-500/30 bg-blue-500/5 relative overflow-hidden">
-              <div className="flex items-center gap-3 mb-6">
-                <div className="w-10 h-10 rounded-xl bg-blue-500/20 flex items-center justify-center">
-                  <FileSpreadsheet className="w-5 h-5 text-blue-400" />
-                </div>
-                <div>
-                  <h3 className="text-lg font-bold text-foreground">GeniusHub Zero-Click Sync</h3>
-                  <p className="text-xs text-muted-foreground">Upload your Excel file. The GeniusHub Extension will automatically extract the candidates securely.</p>
-                </div>
-              </div>
-
-              {(progressData.status === 'IDLE' || progressData.status === 'ERROR') && (
-                <form onSubmit={handleExcelSubmit} className="space-y-4">
-                  <div className="flex items-end gap-4">
-                    <div className="flex-1">
-                      <label className="block text-xs font-medium text-muted-foreground mb-1">Exported Excel File</label>
-                      <input type="file" accept=".xlsx, .xls, .csv" onChange={(e) => setExcelFile(e.target.files?.[0] || null)} className="w-full text-sm text-muted-foreground file:mr-3 file:py-2 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-bold file:bg-blue-600/20 file:text-blue-400 cursor-pointer bg-background border border-border rounded-lg" required />
-                    </div>
-                    <button type="submit" className="px-8 py-2.5 rounded-lg font-bold text-white bg-blue-600 hover:bg-blue-500 transition-all flex items-center justify-center gap-2 shadow-lg shadow-blue-500/20">
-                      <Zap className="w-4 h-4" /> Auto-Sync
-                    </button>
-                  </div>
-                  
-                  {progressData.status === 'ERROR' && (
-                    <div className="mt-2 p-3 bg-destructive/10 text-destructive text-sm rounded-lg border border-destructive/20">
-                      {progressData.message}
-                    </div>
-                  )}
-                </form>
-              )}
-
-              {(progressData.status === 'RUNNING' || progressData.status === 'SUCCESS') && (
-                <div className="p-5 bg-gray-900/50 border border-gray-800 rounded-xl">
-                  
-                  <div className="flex justify-between text-sm font-bold text-gray-300 mb-4 items-center">
-                    <span className={`flex items-center gap-2 ${progressData.status === 'SUCCESS' ? 'text-success' : 'text-blue-400'}`}>
-                      {progressData.status === 'RUNNING' && <Loader2 className="w-4 h-4 animate-spin" />}
-                      <span dangerouslySetInnerHTML={{__html: progressData.message}}></span>
-                    </span>
-                    {progressData.total > 0 && <span>{progressData.current} / {progressData.total} Profiles Extracted</span>}
-                  </div>
-                  
-                  <div className="w-full bg-gray-800 rounded-full h-3 overflow-hidden border border-gray-700">
-                    <motion.div 
-                      className={`h-3 rounded-full ${progressData.status === 'SUCCESS' ? 'bg-success shadow-[0_0_10px_rgba(16,185,129,0.8)]' : 'bg-blue-500 shadow-[0_0_10px_rgba(59,130,246,0.8)]'}`}
-                      initial={{ width: 0 }}
-                      animate={{ width: progressData.total > 0 ? `${(progressData.current / progressData.total) * 100}%` : (progressData.status === 'SUCCESS' ? '100%' : '10%') }}
-                      transition={{ ease: "easeOut", duration: 0.5 }}
-                    />
-                  </div>
-                </div>
-              )}
-            </GlowingCard>
-          </motion.div>
-        )}
-      </AnimatePresence>
 
       <GlowingCard className="overflow-hidden">
         {selectedIds.size > 0 && (
