@@ -15,7 +15,7 @@ export default function DatabasePage() {
   const [selectedCandidate, setSelectedCandidate] = useState<any | null>(null);
   const [isWiping, setIsWiping] = useState(false);
 
-  const [liveSync, setLiveSync] = useState(true); // Default ON to catch extension uploads!
+  const [liveSync, setLiveSync] = useState(true); 
 
   const [showExcelUpload, setShowExcelUpload] = useState(false);
   const [excelFile, setExcelFile] = useState<File | null>(null);
@@ -69,7 +69,10 @@ export default function DatabasePage() {
                 total: p.total,
                 message: p.message
             });
-            if (p.done) setLiveSync(true);
+            if (p.done) {
+                setLiveSync(true);
+                setExcelFile(null); // Reset form
+            }
         }
     };
     window.addEventListener("message", handleMessage);
@@ -81,13 +84,13 @@ export default function DatabasePage() {
     e.preventDefault();
     if (!excelFile) return;
 
-    setProgressData({ status: 'RUNNING', current: 0, total: 0, message: 'Extracting hidden links from Excel...' });
+    setProgressData({ status: 'RUNNING', current: 0, total: 0, message: 'Extracting candidate links from Excel...' });
 
     const formData = new FormData();
     formData.append("file", excelFile);
 
     try {
-      // 1. Send Excel to backend to extract the True URLs
+      // 1. Send Excel to backend to extract the URLs via Pandas
       const res = await fetch(`${BACKEND_BASE_URL}/api/extract-excel-links`, {
         method: "POST",
         body: formData,
@@ -95,15 +98,15 @@ export default function DatabasePage() {
       const data = await res.json();
       
       if (data.status === "success" && data.links && data.links.length > 0) {
-          setProgressData({ status: 'RUNNING', current: 0, total: data.links.length, message: 'Handing over to local Chrome Extension...' });
+          setProgressData({ status: 'RUNNING', current: 0, total: data.links.length, message: 'Handing over to local GeniusHub Extension...' });
           
           // 2. Dispatch the silent command to the Chrome Extension
           window.postMessage({ action: "GENIUSHUB_START_SYNC", links: data.links }, "*");
       } else {
-          setProgressData({ status: 'ERROR', current: 0, total: 0, message: '❌ No valid profile links found in Excel.' });
+          setProgressData({ status: 'ERROR', current: 0, total: 0, message: data.message || '❌ No valid profile links found in Excel.' });
       }
     } catch (error) {
-      setProgressData({ status: 'ERROR', current: 0, total: 0, message: '❌ Failed to connect to backend.' });
+      setProgressData({ status: 'ERROR', current: 0, total: 0, message: '❌ Failed to connect to backend extraction API.' });
     }
   };
 
@@ -201,8 +204,8 @@ export default function DatabasePage() {
                   <FileSpreadsheet className="w-5 h-5 text-blue-400" />
                 </div>
                 <div>
-                  <h3 className="text-lg font-bold text-foreground">Zero-Click Sync Engine</h3>
-                  <p className="text-xs text-muted-foreground">Upload the Excel file here. The GeniusHub Extension will automatically handle the downloading securely.</p>
+                  <h3 className="text-lg font-bold text-foreground">GeniusHub Zero-Click Sync</h3>
+                  <p className="text-xs text-muted-foreground">Upload your Excel file. The GeniusHub Extension will automatically extract the candidates securely.</p>
                 </div>
               </div>
 
@@ -211,7 +214,7 @@ export default function DatabasePage() {
                   <div className="flex items-end gap-4">
                     <div className="flex-1">
                       <label className="block text-xs font-medium text-muted-foreground mb-1">Exported Excel File</label>
-                      <input type="file" accept=".xlsx, .xls" onChange={(e) => setExcelFile(e.target.files?.[0] || null)} className="w-full text-sm text-muted-foreground file:mr-3 file:py-2 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-bold file:bg-blue-600/20 file:text-blue-400 cursor-pointer bg-background border border-border rounded-lg" required />
+                      <input type="file" accept=".xlsx, .xls, .csv" onChange={(e) => setExcelFile(e.target.files?.[0] || null)} className="w-full text-sm text-muted-foreground file:mr-3 file:py-2 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-bold file:bg-blue-600/20 file:text-blue-400 cursor-pointer bg-background border border-border rounded-lg" required />
                     </div>
                     <button type="submit" className="px-8 py-2.5 rounded-lg font-bold text-white bg-blue-600 hover:bg-blue-500 transition-all flex items-center justify-center gap-2 shadow-lg shadow-blue-500/20">
                       <Zap className="w-4 h-4" /> Auto-Sync
@@ -232,7 +235,7 @@ export default function DatabasePage() {
                   <div className="flex justify-between text-sm font-bold text-gray-300 mb-4 items-center">
                     <span className={`flex items-center gap-2 ${progressData.status === 'SUCCESS' ? 'text-success' : 'text-blue-400'}`}>
                       {progressData.status === 'RUNNING' && <Loader2 className="w-4 h-4 animate-spin" />}
-                      <span dangerouslySetLabel={{__html: progressData.message}}></span>
+                      <span dangerouslySetInnerHTML={{__html: progressData.message}}></span>
                     </span>
                     {progressData.total > 0 && <span>{progressData.current} / {progressData.total} Profiles Extracted</span>}
                   </div>
