@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Database, Trash2, AlertOctagon, Loader2, CheckSquare, Square, Eye, Activity, RefreshCw, DownloadCloud } from 'lucide-react';
+import { Database, Trash2, AlertOctagon, Loader2, CheckSquare, Square, Eye, Activity, RefreshCw, Zap, UploadCloud, FileSpreadsheet, KeyRound, ShieldAlert } from 'lucide-react';
 import { api } from '@/lib/api';
 import CandidateModal from '@/components/CandidateModal';
 import GlowingCard from '@/components/GlowingCard';
@@ -15,9 +15,22 @@ export default function DatabasePage() {
   const [selectedCandidate, setSelectedCandidate] = useState<any | null>(null);
   const [isWiping, setIsWiping] = useState(false);
 
-  const [liveSync, setLiveSync] = useState(true); // Default ON to catch extension uploads!
+  const [liveSync, setLiveSync] = useState(false);
+  const [recentImports, setRecentImports] = useState<any[]>([]);
+
+  const [showExcelUpload, setShowExcelUpload] = useState(false);
+  const [excelFile, setExcelFile] = useState<File | null>(null);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [naukriCookie, setNaukriCookie] = useState(''); 
+  const [otpInput, setOtpInput] = useState(''); 
+  
+  const [syncMode, setSyncMode] = useState<'OTP' | 'COOKIE'>('OTP');
+
+  const [progressData, setProgressData] = useState({ status: 'IDLE', current: 0, total: 0, message: '' });
 
   const PER_PAGE = 50;
+  const BACKEND_BASE_URL = "https://vinu019-resume-backend.hf.space";
 
   const fetchDatabase = async (p: number) => {
     setLoading(true);
@@ -41,16 +54,83 @@ export default function DatabasePage() {
     if (liveSync) {
       const fetchRecent = async () => {
         try {
+          const data = await api.browse({ page: 1, per_page: 5, sort_by: 'created_at', sort_order: 'desc' });
+          setRecentImports(data.candidates);
           const mainData = await api.browse({ page, per_page: PER_PAGE });
           setCandidates(mainData.candidates);
           setTotal(mainData.total);
-        } catch (e) {}
+        } catch (e) {
+          console.error("Live Sync Error", e);
+        }
       };
       fetchRecent(); 
       interval = setInterval(fetchRecent, 3000); 
     }
     return () => clearInterval(interval);
   }, [liveSync, page]);
+
+  useEffect(() => {
+    let interval: any;
+    if (progressData.status === 'RUNNING' || progressData.status === 'AWAITING_OTP') {
+      interval = setInterval(async () => {
+        try {
+          const res = await fetch(`${BACKEND_BASE_URL}/api/upload-progress`);
+          const data = await res.json();
+          setProgressData(data);
+          
+          if (data.status === 'SUCCESS') {
+            setExcelFile(null); 
+            setLiveSync(true); 
+            clearInterval(interval);
+          } else if (data.status === 'ERROR') {
+            clearInterval(interval);
+          }
+        } catch (e) {
+          console.error("Failed to fetch progress");
+        }
+      }, 1500); 
+    }
+    return () => clearInterval(interval);
+  }, [progressData.status]);
+
+  const handleExcelSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!excelFile || !email) return;
+    if (syncMode === 'OTP' && !password) return;
+    if (syncMode === 'COOKIE' && !naukriCookie) return;
+
+    setProgressData({ status: 'RUNNING', current: 0, total: 0, message: 'Deploying GeniusHub Cloud Bot...' });
+
+    const formData = new FormData();
+    formData.append("file", excelFile);
+    formData.append("naukri_email", email);
+    formData.append("naukri_password", syncMode === 'OTP' ? password : '');
+    formData.append("naukri_cookie", syncMode === 'COOKIE' ? naukriCookie : '');
+
+    try {
+      await fetch(`${BACKEND_BASE_URL}/api/upload-excel-sync`, {
+        method: "POST",
+        body: formData,
+      });
+    } catch (error) {
+      setProgressData({ status: 'ERROR', current: 0, total: 0, message: '❌ Failed to connect to backend.' });
+    }
+  };
+
+  const handleOtpSubmit = async () => {
+    if (!otpInput) return;
+    try {
+      await fetch(`${BACKEND_BASE_URL}/api/submit-otp`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ otp: otpInput }),
+      });
+      setProgressData(prev => ({ ...prev, status: 'RUNNING', message: 'Verifying OTP...' }));
+      setOtpInput('');
+    } catch (error) {
+      console.error("Failed to send OTP");
+    }
+  };
 
   const toggleSelect = (id: number) => {
     setSelectedIds(prev => {
@@ -108,6 +188,17 @@ export default function DatabasePage() {
         
         <div className="flex items-center gap-3">
           <button 
+            onClick={() => setShowExcelUpload(!showExcelUpload)}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl font-bold tracking-wide transition-all ${
+              showExcelUpload 
+                ? 'bg-blue-500/20 text-blue-400 border border-blue-500/50 shadow-[0_0_15px_rgba(59,130,246,0.3)]' 
+                : 'bg-secondary/50 text-muted-foreground border border-border hover:bg-secondary'
+            }`}
+          >
+            <UploadCloud className="w-4 h-4" /> Import Naukri Excel
+          </button>
+
+          <button 
             onClick={() => setLiveSync(!liveSync)}
             className={`flex items-center gap-2 px-4 py-2 rounded-xl font-bold tracking-wide transition-all ${
               liveSync 
@@ -118,21 +209,166 @@ export default function DatabasePage() {
             {liveSync ? <Activity className="w-4 h-4 animate-pulse" /> : <RefreshCw className="w-4 h-4" />}
             {liveSync ? 'Live Sync Active' : 'Start Live Sync'}
           </button>
+
+          <button 
+            onClick={handleNuclearWipe} 
+            disabled={isWiping || total === 0}
+            className="btn-ghost-glow !text-destructive !border-destructive/30 hover:!bg-destructive/10 flex items-center gap-2 disabled:opacity-50"
+          >
+            {isWiping ? <Loader2 className="w-4 h-4 animate-spin" /> : <AlertOctagon className="w-4 h-4" />} Wipe Database
+          </button>
         </div>
       </div>
 
-      {/* 🚀 THE EXTENSION CALL-TO-ACTION */}
-      <GlowingCard className="p-6 border-blue-500/30 bg-blue-500/5 relative overflow-hidden flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <div className="w-12 h-12 rounded-xl bg-blue-500/20 flex items-center justify-center">
-             <DownloadCloud className="w-6 h-6 text-blue-400" />
-          </div>
-          <div>
-            <h3 className="text-lg font-bold text-foreground">GeniusHub Extension Sync</h3>
-            <p className="text-sm text-muted-foreground">To automatically extract candidates from Naukri without firewall blocks, click the <strong className="text-blue-400">GeniusHub Extension</strong> in your browser toolbar, paste your Excel links, and watch them sync here live.</p>
-          </div>
-        </div>
-      </GlowingCard>
+      <AnimatePresence>
+        {showExcelUpload && (
+          <motion.div 
+            initial={{ opacity: 0, height: 0, y: -20 }} 
+            animate={{ opacity: 1, height: 'auto', y: 0 }} 
+            exit={{ opacity: 0, height: 0, y: -20 }}
+            className="overflow-hidden"
+          >
+            <GlowingCard className="p-6 border-blue-500/30 bg-blue-500/5 relative overflow-hidden">
+              <div className="flex items-center gap-3 mb-6">
+                <div className="w-10 h-10 rounded-xl bg-blue-500/20 flex items-center justify-center">
+                  <FileSpreadsheet className="w-5 h-5 text-blue-400" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-foreground">GeniusHub Hyper-Sync Engine</h3>
+                  <p className="text-xs text-muted-foreground">Automatically extract resumes from Candidate Profile hyperlinks.</p>
+                </div>
+              </div>
+
+              {(progressData.status === 'IDLE' || progressData.status === 'ERROR') && (
+                <div className="space-y-4">
+                  <div className="flex bg-background border border-border p-1 rounded-lg">
+                    <button type="button" onClick={() => setSyncMode('OTP')} className={`flex-1 py-2 text-xs font-bold rounded-md transition-all ${syncMode === 'OTP' ? 'bg-blue-600 text-white shadow-md' : 'text-muted-foreground hover:text-foreground'}`}>Standard Login (OTP)</button>
+                    <button type="button" onClick={() => setSyncMode('COOKIE')} className={`flex-1 py-2 text-xs font-bold rounded-md transition-all flex items-center justify-center gap-2 ${syncMode === 'COOKIE' ? 'bg-destructive/80 text-white shadow-md' : 'text-muted-foreground hover:text-foreground'}`}><ShieldAlert className="w-3.5 h-3.5"/> God-Mode (WAF Bypass)</button>
+                  </div>
+
+                  <form onSubmit={handleExcelSubmit} className="space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-xs font-medium text-muted-foreground mb-1">Exported Excel File</label>
+                        <input type="file" accept=".xlsx, .xls" onChange={(e) => setExcelFile(e.target.files?.[0] || null)} className="w-full text-sm text-muted-foreground file:mr-3 file:py-2 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-bold file:bg-blue-600/20 file:text-blue-400 cursor-pointer bg-background border border-border rounded-lg" required />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-muted-foreground mb-1">Recruiter Email</label>
+                        <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="recruiter@company.com" className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm text-foreground focus:outline-none focus:border-blue-500" required />
+                      </div>
+                    </div>
+
+                    <AnimatePresence mode="wait">
+                      {syncMode === 'OTP' ? (
+                        <motion.div key="otp" initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}>
+                          <label className="block text-xs font-medium text-muted-foreground mb-1">Password</label>
+                          <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm text-foreground focus:outline-none focus:border-blue-500" required={syncMode === 'OTP'} />
+                        </motion.div>
+                      ) : (
+                        <motion.div key="cookie" initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}>
+                          <label className="block text-xs font-medium text-muted-foreground mb-1">
+                            Naukri Session Cookie <span className="text-blue-400 italic font-normal">(Login to Naukri &gt; F12 &gt; Console &gt; Type `document.cookie` &gt; Copy result)</span>
+                          </label>
+                          <textarea value={naukriCookie} onChange={(e) => setNaukriCookie(e.target.value)} placeholder="Paste your raw document.cookie string here..." rows={2} className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm text-foreground focus:outline-none focus:border-blue-500 font-mono text-[10px]" required={syncMode === 'COOKIE'} />
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+
+                    <button type="submit" className={`w-full py-2.5 rounded-lg font-bold text-white transition-all flex items-center justify-center gap-2 shadow-lg ${syncMode === 'COOKIE' ? 'bg-destructive hover:bg-destructive/80 shadow-destructive/20' : 'bg-blue-600 hover:bg-blue-500 shadow-blue-500/20'}`}>
+                      <Zap className="w-4 h-4" /> Start {syncMode === 'COOKIE' ? 'God-Mode Bypass' : 'Hyper-Sync'}
+                    </button>
+                    
+                    {progressData.status === 'ERROR' && (
+                      <div className="mt-2 p-3 bg-destructive/10 text-destructive text-sm rounded-lg border border-destructive/20">
+                        {progressData.message}
+                      </div>
+                    )}
+                  </form>
+                </div>
+              )}
+
+              {(progressData.status === 'RUNNING' || progressData.status === 'SUCCESS' || progressData.status === 'AWAITING_OTP') && (
+                <div className="p-5 bg-gray-900/50 border border-gray-800 rounded-xl">
+                  
+                  <div className="flex justify-between text-sm font-bold text-gray-300 mb-4 items-center">
+                    <span className={`flex items-center gap-2 ${progressData.status === 'SUCCESS' ? 'text-success' : progressData.status === 'AWAITING_OTP' ? 'text-warning' : 'text-blue-400'}`}>
+                      {progressData.status === 'RUNNING' && <Loader2 className="w-4 h-4 animate-spin" />}
+                      {progressData.message}
+                    </span>
+                    {progressData.total > 0 && <span>{progressData.current} / {progressData.total} Profiles Extracted</span>}
+                  </div>
+                  
+                  {progressData.status !== 'AWAITING_OTP' && (
+                    <div className="w-full bg-gray-800 rounded-full h-3 overflow-hidden border border-gray-700">
+                      <motion.div 
+                        className={`h-3 rounded-full ${progressData.status === 'SUCCESS' ? 'bg-success shadow-[0_0_10px_rgba(16,185,129,0.8)]' : 'bg-blue-500 shadow-[0_0_10px_rgba(59,130,246,0.8)]'}`}
+                        initial={{ width: 0 }}
+                        animate={{ width: progressData.total > 0 ? `${(progressData.current / progressData.total) * 100}%` : (progressData.status === 'SUCCESS' ? '100%' : '10%') }}
+                        transition={{ ease: "easeOut", duration: 0.5 }}
+                      />
+                    </div>
+                  )}
+
+                  {progressData.status === 'AWAITING_OTP' && (
+                    <div className="mt-4 p-4 border border-warning/30 bg-warning/5 rounded-lg flex flex-col gap-3">
+                      <div className="flex items-center gap-2 text-warning font-bold text-sm">
+                        <KeyRound className="w-5 h-5" /> Naukri sent an OTP to the recruiter's email/phone.
+                      </div>
+                      <div className="flex gap-2">
+                        <input 
+                          type="text" 
+                          placeholder="Enter OTP Code" 
+                          value={otpInput} 
+                          onChange={(e) => setOtpInput(e.target.value)} 
+                          className="flex-1 px-4 py-2 bg-background border border-border rounded-lg text-foreground focus:outline-none focus:border-warning"
+                        />
+                        <button onClick={handleOtpSubmit} className="px-6 py-2 bg-warning hover:bg-warning/80 text-warning-foreground font-bold rounded-lg transition-colors shadow-lg shadow-warning/20">
+                          Verify & Continue
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </GlowingCard>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {liveSync && (
+          <motion.div initial={{ opacity: 0, height: 0, y: -20 }} animate={{ opacity: 1, height: 'auto', y: 0 }} exit={{ opacity: 0, height: 0, y: -20 }} className="overflow-hidden">
+            <GlowingCard className="p-5 border-success/30 bg-success/5 relative overflow-hidden">
+              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-success/0 via-success to-success/0 animate-shimmer" />
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-8 h-8 rounded-full bg-success/20 flex items-center justify-center">
+                  <Zap className="w-4 h-4 text-success animate-pulse" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-foreground">Live Radar Active</h3>
+                  <p className="text-[10px] text-muted-foreground uppercase tracking-widest">Showing newest arrivals in real-time</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
+                {recentImports.length === 0 ? (
+                  <div className="col-span-5 text-center py-6 text-sm text-muted-foreground italic flex items-center justify-center gap-2">
+                    <Loader2 className="w-4 h-4 animate-spin" /> Waiting for resumes to be pushed...
+                  </div>
+                ) : (
+                  recentImports.map((c, i) => (
+                    <motion.div key={c.id} initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ delay: i * 0.1 }} onClick={() => setSelectedCandidate(c)} className="bg-card border border-success/20 rounded-xl p-3 cursor-pointer hover:border-success/50 transition-colors shadow-lg">
+                      <p className="text-xs font-bold text-foreground truncate">{c.name}</p>
+                      <p className="text-[10px] text-success mt-1">{c.score}% Match Score</p>
+                      <p className="text-[9px] text-muted-foreground truncate mt-1">{c.filename}</p>
+                    </motion.div>
+                  ))
+                )}
+              </div>
+            </GlowingCard>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <GlowingCard className="overflow-hidden">
         {selectedIds.size > 0 && (
