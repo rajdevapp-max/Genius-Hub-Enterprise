@@ -30,9 +30,9 @@ def sync_cloud_resumes():
         index_path = hf_hub_download(repo_id="rajRao01821/company-resumes", filename="faiss_index.bin", repo_type="dataset", token=token)
         shutil.copy(index_path, "faiss_index.bin")
 
-        zip_path = hf_hub_download(repo_id="rajRao01821/company-resumes", filename="resumes.zip", repo_type="dataset", token=token)
-        with zipfile.ZipFile(zip_path, 'r') as zip_ref:
-            zip_ref.extractall("resumes")
+       # zip_path = hf_hub_download(repo_id="rajRao01821/company-resumes", filename="resumes.zip", repo_type="dataset", token=token)
+       # with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+         #   zip_ref.extractall("resumes")
             
         print("✅ SYSTEM FULLY RESTORED FROM CLOUD! 30K+ RESUMES READY.", flush=True)
     except Exception as e:
