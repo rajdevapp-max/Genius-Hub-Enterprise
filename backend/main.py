@@ -61,9 +61,9 @@ from watcher import start_watcher_thread, get_watcher_stats
 from dedup import find_duplicates, remove_duplicates, scan_folder_duplicates
 from model_trainer import start_ml_cron
 
-init_db()
-start_watcher_thread()
-start_ml_cron() 
+#init_db()
+#start_watcher_thread()
+#start_ml_cron() 
 
 app = FastAPI(title="GeniusHub Intelligence Platform", version="48.0")
 app.add_middleware(
