@@ -38,7 +38,7 @@ def sync_cloud_resumes():
     except Exception as e:
         print(f"⚠️ Cloud Sync failed: {e}", flush=True)
 
-sync_cloud_resumes() 
+#sync_cloud_resumes() 
 
 import json
 import re
