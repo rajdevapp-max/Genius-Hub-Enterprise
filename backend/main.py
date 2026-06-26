@@ -76,7 +76,16 @@ app.add_middleware(
 @app.on_event("startup")
 async def startup_event():
     import asyncio
-    asyncio.create_task(asyncio.to_thread(sync_cloud_resumes))
+    
+    # Group all the heavy lifting into one background task
+    def run_background_services():
+        init_db()
+        start_watcher_thread()
+        start_ml_cron()
+        sync_cloud_resumes()
+        
+    # Execute safely in the background without blocking the port
+    asyncio.create_task(asyncio.to_thread(run_background_services))
 
 RESUME_DIR = os.environ.get("RESUME_DIR", "resumes")
 os.makedirs(RESUME_DIR, exist_ok=True)
