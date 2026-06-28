@@ -78,7 +78,11 @@ async def startup_event():
     import asyncio
     
     # Group all the heavy lifting into one background task
+    # Group all the heavy lifting into one background task
     def run_background_services():
+        from embedder import load_local_model
+        load_local_model()  # <--- Loads the massive AI model safely in the background!
+        
         init_db()
         start_watcher_thread()
         start_ml_cron()

@@ -11,14 +11,20 @@ import faiss
 import threading
 from typing import Optional
 
-try:
-    from sentence_transformers import SentenceTransformer
-    model = SentenceTransformer("all-MiniLM-L6-v2")
-    USE_LOCAL = True
-    print("[embedder] ✓ Local model loaded (all-MiniLM-L6-v2)")
-except Exception:
-    USE_LOCAL = False
-    print("[embedder] ⚠ Local model unavailable, using HF API")
+model = None
+USE_LOCAL = True 
+
+def load_local_model():
+    global model, USE_LOCAL
+    if model is None:
+        try:
+            from sentence_transformers import SentenceTransformer
+            model = SentenceTransformer("all-MiniLM-L6-v2")
+            USE_LOCAL = True
+            print("[embedder] ✓ Local model loaded (all-MiniLM-L6-v2)")
+        except Exception:
+            USE_LOCAL = False
+            print("[embedder] ⚠ Local model unavailable, using HF API")
 
 import requests
 
