@@ -19,3 +19,10 @@ services:
         sync: false
       - key: AUTH_SECRET
         generateValue: true
+    # ── For 24x7 uptime + persistent client data, switch to a paid plan and uncomment: ──
+    # plan: starter
+    # disk:
+    #   name: geniushub-data
+    #   mountPath: /var/data
+    #   sizeGB: 1
+    # and add envVars: DB_PATH=/var/data/resumes.db, RESUME_DIR=/var/data/resumes, DATA_DIR=/var/data

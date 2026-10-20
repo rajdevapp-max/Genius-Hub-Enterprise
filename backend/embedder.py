@@ -53,8 +53,9 @@ HF_EMBED_URL = "https://router.huggingface.co/hf-inference/models/sentence-trans
 HEADERS = {"Authorization": f"Bearer {HF_TOKEN}"} if HF_TOKEN else {}
 
 EMBEDDING_DIM = 384
-INDEX_PATH = "faiss_index.bin"
-META_PATH = "faiss_meta.json"
+DATA_DIR = os.environ.get("DATA_DIR", ".")
+INDEX_PATH = os.path.join(DATA_DIR, "faiss_index.bin")
+META_PATH = os.path.join(DATA_DIR, "faiss_meta.json")
 
 
 def build_embedding_text(name: str, location: str, skills: list, raw_text: str) -> str:
