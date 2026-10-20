@@ -6,7 +6,8 @@ import os
 import zipfile
 import shutil
 import threading 
-import hashlib 
+import hashlib
+import hmac
 from huggingface_hub import hf_hub_download
 import time
 
@@ -17,18 +18,32 @@ from dotenv import load_dotenv
 load_dotenv()
 
 def sync_cloud_resumes():
+    # Client demo branch: starts with an empty database unless explicitly opted in.
+    if os.environ.get("CLOUD_SYNC", "0") != "1":
+        print("☁️ Cloud sync disabled (CLOUD_SYNC!=1). Starting with local/empty database.", flush=True)
+        return
     token = os.environ.get("HF_TOKEN")
     if not token:
         print("⚠️ No HF_TOKEN found! Skipping cloud sync.", flush=True)
         return
         
     print("☁️ Syncing Cloud Database & Search Index...", flush=True)
+    repo = os.environ.get("HF_DATASET_REPO", "rajRao01821/company-resumes")
+    db_file = os.environ.get("DB_PATH", "resumes.db")
     try:
-        db_path = hf_hub_download(repo_id="rajRao01821/company-resumes", filename="resumes.db", repo_type="dataset", token=token)
-        shutil.copy(db_path, "resumes.db")
-        
-        index_path = hf_hub_download(repo_id="rajRao01821/company-resumes", filename="faiss_index.bin", repo_type="dataset", token=token)
+        db_path = hf_hub_download(repo_id=repo, filename="resumes.db", repo_type="dataset", token=token)
+        # A WAL/SHM pair left over from a different database would corrupt the fresh copy.
+        for stale in (db_file + "-wal", db_file + "-shm"):
+            if os.path.exists(stale): os.remove(stale)
+        shutil.copy(db_path, db_file)
+
+        index_path = hf_hub_download(repo_id=repo, filename="faiss_index.bin", repo_type="dataset", token=token)
         shutil.copy(index_path, "faiss_index.bin")
+        try:
+            meta_path = hf_hub_download(repo_id=repo, filename="faiss_meta.json", repo_type="dataset", token=token)
+            shutil.copy(meta_path, "faiss_meta.json")
+        except Exception as e:
+            print(f"⚠️ faiss_meta.json not in cloud dataset ({e}); index will be reconciled against the DB.", flush=True)
 
        # zip_path = hf_hub_download(repo_id="rajRao01821/company-resumes", filename="resumes.zip", repo_type="dataset", token=token)
        # with zipfile.ZipFile(zip_path, 'r') as zip_ref:
@@ -43,29 +58,56 @@ def sync_cloud_resumes():
 import json
 import re
 from typing import Optional
-from fastapi import FastAPI, UploadFile, File, HTTPException, Query
+from fastapi import FastAPI, UploadFile, File, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.middleware.gzip import GZipMiddleware
+from fastapi.responses import FileResponse, StreamingResponse, JSONResponse
 from pydantic import BaseModel
 import csv
 import io
 from datetime import datetime
-from sqlalchemy import or_
+from sqlalchemy import or_, and_
 from sqlalchemy.orm import defer 
 
-from database import init_db, SessionLocal, Resume
-from embedder import resume_index
+from database import init_db, SessionLocal, Resume, engine
+from embedder import resume_index, build_embedding_text, load_local_model
 from extractor import process_resume, batch_process
-from classifier import classify_resume, extract_skills_regex, extract_all_skills, extract_education
+from classifier import classify_resume, extract_skills_regex, extract_all_skills, extract_education, skill_regex
 from watcher import start_watcher_thread, get_watcher_stats
 from dedup import find_duplicates, remove_duplicates, scan_folder_duplicates
 from model_trainer import start_ml_cron
 
-#init_db()
-#start_watcher_thread()
-#start_ml_cron() 
-
 app = FastAPI(title="GeniusHub Intelligence Platform", version="48.0")
+
+SERVICE_STATE = {"ready": False, "stage": "starting"}
+
+# ── Client demo auth: credentials live only in server env vars, never in the frontend bundle ──
+APP_USERNAME = os.environ.get("APP_USERNAME", "")
+APP_PASSWORD = os.environ.get("APP_PASSWORD", "")
+AUTH_SECRET = os.environ.get("AUTH_SECRET", "") or hashlib.sha256(f"{APP_USERNAME}:{APP_PASSWORD}:geniushub".encode()).hexdigest()
+PUBLIC_PATHS = {"/api/login", "/api/live-status"}
+
+def make_token(username: str) -> str:
+    return hmac.new(AUTH_SECRET.encode(), username.encode(), hashlib.sha256).hexdigest()
+
+def token_valid(token: str) -> bool:
+    return bool(APP_USERNAME) and bool(token) and hmac.compare_digest(token, make_token(APP_USERNAME))
+
+@app.middleware("http")
+async def readiness_gate(request: Request, call_next):
+    path = request.url.path
+    if path.startswith("/api/") and request.method != "OPTIONS" and path not in PUBLIC_PATHS:
+        auth = request.headers.get("authorization", "")
+        token = auth[7:] if auth.lower().startswith("bearer ") else request.query_params.get("token", "")
+        if not token_valid(token):
+            return JSONResponse({"detail": "Not authenticated"}, status_code=401)
+        # Until the DB/index are in place, answer 503 instead of crashing on missing tables or a half-copied DB.
+        if not SERVICE_STATE["ready"]:
+            return JSONResponse({"detail": f"Engine warming up ({SERVICE_STATE['stage']}). Retry shortly."}, status_code=503, headers={"Retry-After": "5"})
+    return await call_next(request)
+
+# Added last so it is the outermost layer: 401/503 responses still carry CORS headers.
+app.add_middleware(GZipMiddleware, minimum_size=1000)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -73,23 +115,102 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+@app.post("/api/login")
+def login(req: LoginRequest):
+    if not (APP_USERNAME and APP_PASSWORD):
+        raise HTTPException(503, "Login is not configured on the server")
+    ok = hmac.compare_digest(req.username.strip(), APP_USERNAME) and hmac.compare_digest(req.password, APP_PASSWORD)
+    if not ok:
+        time.sleep(0.5)
+        raise HTTPException(401, "Invalid Access ID or password")
+    return {"token": make_token(APP_USERNAME), "username": APP_USERNAME}
+
+def reconcile_index():
+    """Make the vector index match the DB: drop vectors for deleted rows, embed rows that have none."""
+    db = SessionLocal()
+    try:
+        db_ids = {r[0] for r in db.query(Resume.id).all()}
+        indexed = resume_index.indexed_ids()
+        for stale_id in indexed - db_ids:
+            resume_index.remove(stale_id)
+        missing = sorted(db_ids - indexed)
+        if not missing:
+            resume_index.force_save_to_disk()
+            print(f"[reconcile] Index in sync ({len(db_ids)} resumes).", flush=True)
+            return
+        print(f"[reconcile] Embedding {len(missing)} resumes missing from the vector index...", flush=True)
+        CHUNK = 256
+        for i in range(0, len(missing), CHUNK):
+            ids = missing[i:i + CHUNK]
+            rows = db.query(Resume.id, Resume.name, Resume.location, Resume.skills, Resume.raw_text).filter(Resume.id.in_(ids)).all()
+            items = [{"id": r.id, "text": build_embedding_text(r.name, r.location, json.loads(r.skills) if r.skills else [], r.raw_text)} for r in rows]
+            resume_index.add_batch(items)
+        print("[reconcile] ✓ Vector index rebuilt for missing resumes.", flush=True)
+    except Exception as e:
+        print(f"[reconcile] failed: {e}", flush=True)
+    finally:
+        db.close()
+
+def run_background_services():
+    try:
+        SERVICE_STATE["stage"] = "syncing cloud data"
+        sync_cloud_resumes()
+        engine.dispose()  # drop any pooled handle to the pre-sync file
+        SERVICE_STATE["stage"] = "initializing database"
+        init_db()
+        resume_index.reload()
+    except Exception as e:
+        print(f"❌ Startup error: {e}", flush=True)
+        init_db()
+    SERVICE_STATE.update(ready=True, stage="ready")
+    print("✅ API ready.", flush=True)
+
+    load_local_model()  # warm the embedding model so the first search isn't slow
+    reconcile_index()
+    start_watcher_thread()
+    start_ml_cron()
+
 @app.on_event("startup")
 async def startup_event():
-    import asyncio
-    
-    # Group all the heavy lifting into one background task
-    # Group all the heavy lifting into one background task
-    def run_background_services():
-        from embedder import load_local_model
-        load_local_model()  # <--- Loads the massive AI model safely in the background!
-        
-        init_db()
-        start_watcher_thread()
-        start_ml_cron()
-        sync_cloud_resumes()
-        
-    # Execute safely in the background without blocking the port
-    asyncio.create_task(asyncio.to_thread(run_background_services))
+    # Port opens immediately (HF health check); heavy work runs in a daemon thread.
+    threading.Thread(target=run_background_services, daemon=True).start()
+
+def invalidate_stats_cache():
+    STATS_CACHE["data"] = None
+
+def term_pattern(term: str) -> re.Pattern:
+    return re.compile(skill_regex(term))
+
+def safe_filename(name: str) -> str:
+    name = os.path.basename((name or "").replace("\\", "/")).strip()
+    name = re.sub(r'[^\w\-. ()\[\]]', '_', name)
+    if not name or name.startswith("."):
+        raise HTTPException(400, "Invalid filename")
+    return name
+
+def unique_resume_path(filename: str, content_hash: str) -> tuple[str, str]:
+    """Different candidates often upload the same name (resume.pdf). Never overwrite or collide in the DB."""
+    filename = safe_filename(filename)
+    path = os.path.join(RESUME_DIR, filename)
+    db = SessionLocal()
+    try:
+        taken = os.path.exists(path) or db.query(Resume.id).filter(Resume.filename == filename).first() is not None
+    finally:
+        db.close()
+    if taken:
+        stem, ext = os.path.splitext(filename)
+        filename = f"{stem}_{content_hash[:8]}{ext}"
+        path = os.path.join(RESUME_DIR, filename)
+    return filename, path
+
+def find_by_hash(db, content: bytes):
+    md5 = hashlib.md5(content).hexdigest()
+    sha = hashlib.sha256(content).hexdigest()
+    return db.query(Resume).filter(Resume.file_hash.in_([md5, sha])).first(), md5
 
 RESUME_DIR = os.environ.get("RESUME_DIR", "resumes")
 os.makedirs(RESUME_DIR, exist_ok=True)
@@ -139,7 +260,7 @@ def match_location(req_loc: str, resume_loc: str) -> bool:
 
 def extract_snippet(text: str, keyword: str, window: int = 60) -> str:
     if not text or not keyword: return ""
-    match = re.search(r'\b' + re.escape(keyword.lower()) + r'\b', text.lower())
+    match = re.search(skill_regex(keyword), text.lower())
     if not match: return ""
     idx = match.start()
     start = max(0, idx - window)
@@ -211,21 +332,21 @@ def _resume_to_dict(resume, similarity: float = 0, mandatory_skills=None, second
     context_snippets = []
     
     for qs in mandatory_skills:
-        pattern = r'\b' + re.escape(qs.lower()) + r'\b'
+        pattern = skill_regex(qs)
         if any(re.search(pattern, sl) for sl in skills_lower) or re.search(pattern, raw_text_lower) or re.search(pattern, location_lower):
             matched_mandatory.append(qs)
             snippet = extract_snippet(raw_text, qs)
             if snippet: context_snippets.append({"skill": qs, "context": snippet, "type": "mandatory"})
             
     for qs in secondary_skills:
-        pattern = r'\b' + re.escape(qs.lower()) + r'\b'
+        pattern = skill_regex(qs)
         if any(re.search(pattern, sl) for sl in skills_lower) or re.search(pattern, raw_text_lower) or re.search(pattern, location_lower):
             matched_secondary.append(qs)
             snippet = extract_snippet(raw_text, qs)
             if snippet: context_snippets.append({"skill": qs, "context": snippet, "type": "secondary"})
 
     for qs in dynamic_skills:
-        pattern = r'\b' + re.escape(qs.lower()) + r'\b'
+        pattern = skill_regex(qs)
         if any(re.search(pattern, sl) for sl in skills_lower) or re.search(pattern, raw_text_lower) or re.search(pattern, location_lower):
             matched_dynamic.append(qs)
             snippet = extract_snippet(raw_text, qs)
@@ -235,8 +356,8 @@ def _resume_to_dict(resume, similarity: float = 0, mandatory_skills=None, second
     github_url = next((link for link in hyperlinks if "github.com" in link.lower()), None)
 
     base_visual_score = float(resume.score or 40.0) 
-    impact_score = float(getattr(resume, "impact_score", 0.0))
-    fraud_flag = int(getattr(resume, "fraud_flag", 0))
+    impact_score = float(getattr(resume, "impact_score", 0.0) or 0.0)
+    fraud_flag = int(getattr(resume, "fraud_flag", 0) or 0)
 
     mandatory_ratio = len(matched_mandatory) / max(len(mandatory_skills), 1) if mandatory_skills else 0.0
     secondary_ratio = len(matched_secondary) / max(len(secondary_skills), 1) if secondary_skills else 0.0
@@ -253,8 +374,8 @@ def _resume_to_dict(resume, similarity: float = 0, mandatory_skills=None, second
     final_score = min(max(int(dynamic_ats), 15), 99)
 
     trajectory = extract_trajectory(raw_text)
-    gap_years = getattr(resume, "total_gap_years", 0.0)
-    rel_exp = getattr(resume, "relevant_experience_years", resume.experience_years)
+    gap_years = getattr(resume, "total_gap_years", 0.0) or 0.0
+    rel_exp = getattr(resume, "relevant_experience_years", None) or resume.experience_years or 0.0
 
     combined_mandatory = list(set(matched_mandatory + matched_dynamic))
 
@@ -310,7 +431,12 @@ def search_resumes(req: SearchRequest):
                     conditions.append(Resume.skills.ilike(f"%{term}%"))
                     conditions.append(Resume.location.ilike(f"%{term}%"))
             if conditions:
-                exact_matches = db.query(Resume).filter(or_(*conditions)).limit(FETCH_LIMIT).all()
+                and_groups = [or_(Resume.raw_text.ilike(f"%{t}%"), Resume.skills.ilike(f"%{t}%"), Resume.location.ilike(f"%{t}%")) for t in search_terms if len(t) > 2]
+                id_rows = db.query(Resume.id).filter(and_(*and_groups)).order_by(Resume.score.desc()).limit(FETCH_LIMIT).all()
+                if len(id_rows) < FETCH_LIMIT and len(and_groups) > 1:
+                    seen = {r[0] for r in id_rows}
+                    id_rows += [r for r in db.query(Resume.id).filter(or_(*conditions)).order_by(Resume.score.desc()).limit(FETCH_LIMIT).all() if r[0] not in seen][:FETCH_LIMIT - len(id_rows)]
+                exact_matches = id_rows
                 for r in exact_matches:
                     existing_ids.add(r.id)
                     vector_results.append({"id": r.id, "similarity": 0.6}) 
@@ -323,16 +449,16 @@ def search_resumes(req: SearchRequest):
                     vector_results.append(vr)
         
         if not vector_results:
-            all_resumes = db.query(Resume).limit(FETCH_LIMIT).all()
-            vector_results = [{"id": r.id, "similarity": 0} for r in all_resumes]
+            all_resumes = db.query(Resume.id).order_by(Resume.score.desc()).limit(FETCH_LIMIT).all()
+            vector_results = [{"id": r[0], "similarity": 0} for r in all_resumes]
         
         all_target_ids = [vr.get("id") for vr in vector_results if vr.get("id") is not None]
         resumes_batch = db.query(Resume).filter(Resume.id.in_(all_target_ids)).all()
         resume_map = {r.id: r for r in resumes_batch}
 
-        compiled_mandatory = [re.compile(r'\b' + re.escape(m.lower()) + r'\b') for m in req.mandatory_skills]
-        compiled_exact = [re.compile(r'\b' + re.escape(phrase.lower()) + r'\b', re.IGNORECASE) for phrase in exact_phrases]
-        compiled_not = [re.compile(r'\b' + re.escape(term.lower()) + r'\b', re.IGNORECASE) for term in not_terms]
+        compiled_mandatory = [term_pattern(m) for m in req.mandatory_skills]
+        compiled_exact = [term_pattern(phrase) for phrase in exact_phrases]
+        compiled_not = [term_pattern(term) for term in not_terms]
         
         for vr in vector_results:
             rid = vr.get("id")
@@ -350,7 +476,7 @@ def search_resumes(req: SearchRequest):
             if any(phrase_pat.search(universal_text) is None for phrase_pat in compiled_exact): continue
             if any(not_pat.search(universal_text) is not None for not_pat in compiled_not): continue
 
-            if req.min_experience > 0 and resume.experience_years < req.min_experience: continue
+            if req.min_experience > 0 and (resume.experience_years or 0) < req.min_experience: continue
             if req.mandatory_education and req.mandatory_education.lower() not in (resume.education or "").lower(): continue
 
             if req.require_linkedin and "linkedin.com" not in links_str and "linkedin.com" not in raw_text: continue
@@ -381,6 +507,7 @@ def search_resumes(req: SearchRequest):
     if req.top_n > 0: candidates = candidates[:req.top_n]
     
     total_matches = len(candidates)
+    req.per_page = max(1, min(req.per_page, 200)); req.page = max(1, req.page)
     total_pages = (total_matches + req.per_page - 1) // req.per_page
     start_idx = (req.page - 1) * req.per_page
     end_idx = start_idx + req.per_page
@@ -390,6 +517,17 @@ def search_resumes(req: SearchRequest):
         "page": req.page, "total_pages": total_pages, "per_page": req.per_page,
         "total_time": round(time.time() - start, 2), "total_indexed": resume_index.total
     }
+
+def has_key_skills(resume, key_skills: list[str]) -> bool:
+    haystack = f"{(resume.raw_text or '').lower()} {(resume.skills or '').lower()}"
+    for ks in key_skills:
+        if re.search(skill_regex(ks), haystack):
+            continue
+        parts = [p for p in ks.lower().split() if len(p) > 2]
+        if len(ks.split()) > 1 and parts and all(re.search(skill_regex(p), haystack) for p in parts):
+            continue
+        return False
+    return True
 
 @app.post("/api/match-jd")
 def match_jd(req: JDMatchRequest):
@@ -420,28 +558,7 @@ def match_jd(req: JDMatchRequest):
             if req.location and not match_location(req.location, resume.location): 
                 continue
 
-            if user_key_skills:
-                missing_key = False
-                raw_text = (resume.raw_text or "").lower()
-                skills_text = (resume.skills or "").lower()
-                for ks in user_key_skills:
-                    pat_exact = r'\b' + re.escape(ks.lower()) + r'\b'
-                    if re.search(pat_exact, raw_text) or re.search(pat_exact, skills_text):
-                        continue
-                    parts = ks.lower().split()
-                    if len(parts) > 1:
-                        all_parts_found = True
-                        for part in parts:
-                            if len(part) > 2: 
-                                pat_part = r'\b' + re.escape(part) + r'\b'
-                                if not (re.search(pat_part, raw_text) or re.search(pat_part, skills_text)):
-                                    all_parts_found = False
-                                    break
-                        if all_parts_found:
-                            continue
-                    missing_key = True
-                    break
-                if missing_key: continue
+            if user_key_skills and not has_key_skills(resume, user_key_skills): continue
 
             existing_ids.add(rid)
             d = _resume_to_dict(resume, similarity=r["similarity"], mandatory_skills=extracted_reqs, secondary_skills=[])
@@ -460,28 +577,7 @@ def match_jd(req: JDMatchRequest):
                     if r.id not in existing_ids:
                         if req.location and not match_location(req.location, r.location): continue
                         
-                        if user_key_skills:
-                            missing_key = False
-                            raw_text = (r.raw_text or "").lower()
-                            skills_text = (r.skills or "").lower()
-                            for ks in user_key_skills:
-                                pat_exact = r'\b' + re.escape(ks.lower()) + r'\b'
-                                if re.search(pat_exact, raw_text) or re.search(pat_exact, skills_text):
-                                    continue
-                                parts = ks.lower().split()
-                                if len(parts) > 1:
-                                    all_parts_found = True
-                                    for part in parts:
-                                        if len(part) > 2:
-                                            pat_part = r'\b' + re.escape(part) + r'\b'
-                                            if not (re.search(pat_part, raw_text) or re.search(pat_part, skills_text)):
-                                                all_parts_found = False
-                                                break
-                                    if all_parts_found:
-                                        continue
-                                missing_key = True
-                                break
-                            if missing_key: continue
+                        if user_key_skills and not has_key_skills(r, user_key_skills): continue
 
                         existing_ids.add(r.id)
                         d = _resume_to_dict(r, similarity=0.4, mandatory_skills=extracted_reqs, secondary_skills=[])
@@ -510,19 +606,27 @@ def get_duplicates():
     }
 
 @app.post("/api/duplicates/remove")
-def remove_dupes(dry_run: bool = Query(False)): return remove_duplicates(dry_run=dry_run)
+def remove_dupes(dry_run: bool = Query(False)):
+    result = remove_duplicates(dry_run=dry_run)
+    if not dry_run:
+        resume_index.schedule_save()
+        invalidate_stats_cache()
+    return result
 
 @app.get("/api/preview/{resume_id}")
 def preview_resume(resume_id: int):
     db = SessionLocal()
     try:
-        resume = db.query(Resume).get(resume_id)
+        resume = db.get(Resume, resume_id)
         if not resume: raise HTTPException(404, "Not found")
         return {"id": resume.id, "name": resume.name, "filename": resume.filename, "raw_text": resume.raw_text or "", "score": resume.score}
     finally: db.close()
 
 @app.get("/api/resumes/{filename}")
-def download_resume(filename: str): return FileResponse(os.path.join(RESUME_DIR, filename), filename=filename)
+def download_resume(filename: str):
+    path = os.path.join(RESUME_DIR, os.path.basename(filename))
+    if not os.path.isfile(path): raise HTTPException(404, "Resume file not available on this server")
+    return FileResponse(path, filename=os.path.basename(filename))
 
 @app.get("/api/browse")
 def browse_resumes(page: int = Query(1, ge=1), per_page: int = Query(20, ge=1, le=100), sort_by: str = Query("score"), sort_order: str = Query("desc"), skill_filter: str = Query(""), location_filter: str = Query("")):
@@ -546,7 +650,7 @@ def search_suggestions(q: str = Query("", min_length=1)):
         q_lower = q.lower()
         sug = {"names": [], "skills": [], "locations": []}
         name_set, skill_set, loc_set = set(), set(), set()
-        for r in db.query(Resume).limit(5000).all():
+        for r in db.query(Resume.name, Resume.location, Resume.skills).filter(or_(Resume.name.ilike(f"%{q}%"), Resume.location.ilike(f"%{q}%"), Resume.skills.ilike(f"%{q}%"))).limit(2000).all():
             if q_lower in (r.name or "").lower() and r.name not in name_set: name_set.add(r.name); sug["names"].append(r.name)
             if r.location and q_lower in r.location.lower() and r.location not in loc_set: loc_set.add(r.location); sug["locations"].append(r.location)
             for s in (json.loads(r.skills) if r.skills else []):
@@ -572,12 +676,12 @@ def get_stats():
         
         valid_exps = [r.experience_years for r in resumes if r.experience_years is not None and r.experience_years <= 50]
         avg_exp = sum(valid_exps) / len(valid_exps) if valid_exps else 0
-        avg_score = sum(r.score for r in resumes) / total
-        avg_words = sum(r.word_count for r in resumes) / total
-        avg_pages = sum(r.page_count for r in resumes) / total
+        avg_score = sum(r.score or 0 for r in resumes) / total
+        avg_words = sum(r.word_count or 0 for r in resumes) / total
+        avg_pages = sum(r.page_count or 0 for r in resumes) / total
         resumes_with_images = sum(1 for r in resumes if r.has_image)
         fraud_count = sum(1 for r in resumes if getattr(r, "fraud_flag", 0) == 1)
-        avg_impact = sum(getattr(r, "impact_score", 0.0) for r in resumes) / total
+        avg_impact = sum(getattr(r, "impact_score", 0.0) or 0.0 for r in resumes) / total
         total_certs = sum(len(json.loads(r.certificates) if r.certificates else []) for r in resumes)
         
         skill_count = {}
@@ -605,7 +709,7 @@ def get_stats():
             
         score_ranges = {"10-30": 0, "30-50": 0, "50-70": 0, "70-85": 0, "85-100": 0}
         for r in resumes:
-            s = r.score
+            s = r.score or 0
             if s < 30: score_ranges["10-30"] += 1
             elif s < 50: score_ranges["30-50"] += 1
             elif s < 70: score_ranges["50-70"] += 1
@@ -622,41 +726,51 @@ def get_stats():
 @app.get("/api/live-status")
 def live_status():
     db = SessionLocal()
-    try: return {"total_resumes": db.query(Resume).count(), "indexed": resume_index.total, **get_watcher_stats()}
+    try:
+        if not SERVICE_STATE["ready"]:
+            return {"total_resumes": 0, "indexed": 0, "stage": SERVICE_STATE["stage"], **get_watcher_stats()}
+        return {"total_resumes": db.query(Resume).count(), "indexed": resume_index.total, "stage": SERVICE_STATE["stage"], **get_watcher_stats()}
     finally: db.close()
 
 @app.post("/api/upload")
 async def upload_resume(file: UploadFile = File(...)):
     content = await file.read()
-    file_hash = hashlib.sha256(content).hexdigest()
+    if not content: raise HTTPException(400, "Empty file")
     db = SessionLocal()
     try:
-        existing = db.query(Resume).filter(Resume.file_hash == file_hash).first()
+        existing, content_hash = find_by_hash(db, content)
         if existing:
             return {"message": f"Duplicate Rejected.", "data": {"id": existing.id, "name": existing.filename}, "duplicate": True}
     finally: db.close()
-    path = os.path.join(RESUME_DIR, file.filename)
+    filename, path = unique_resume_path(file.filename, content_hash)
     with open(path, "wb") as f: f.write(content)
-    return {"message": "File received.", "data": {"id": 0, "name": file.filename}}
+    invalidate_stats_cache()
+    return {"message": "File received.", "data": {"id": 0, "name": filename}}
 
 # 🚀 THIS IS THE ENDPOINT THE CHROME EXTENSION CALLS
 @app.post("/api/upload-batch")
 async def upload_batch(files: list[UploadFile] = File(...)):
     saved = []
     duplicates = 0
+    batch_hashes = set()
     db = SessionLocal()
     try:
         for file in files:
             content = await file.read()
-            file_hash = hashlib.sha256(content).hexdigest()
-            existing = db.query(Resume).filter(Resume.file_hash == file_hash).first()
-            if existing:
+            if not content: continue
+            existing, content_hash = find_by_hash(db, content)
+            if existing or content_hash in batch_hashes:
                 duplicates += 1
                 continue
-            path = os.path.join(RESUME_DIR, file.filename)
+            batch_hashes.add(content_hash)
+            try:
+                filename, path = unique_resume_path(file.filename, content_hash)
+            except HTTPException:
+                continue
             with open(path, "wb") as f: f.write(content)
-            saved.append({"name": file.filename})
+            saved.append({"name": filename})
     finally: db.close()
+    invalidate_stats_cache()
     msg = f"Successfully received {len(saved)} resumes. Engine extracting data."
     if duplicates > 0: msg += f" ⚠️ ({duplicates} duplicate resumes auto-rejected)."
     return {"message": msg, "results": saved}
@@ -665,7 +779,7 @@ async def upload_batch(files: list[UploadFile] = File(...)):
 def delete_resume(resume_id: int):
     db = SessionLocal()
     try:
-        resume = db.query(Resume).get(resume_id)
+        resume = db.get(Resume, resume_id)
         if not resume: raise HTTPException(404, "Resume not found")
         file_path = os.path.join(RESUME_DIR, resume.filename)
         if os.path.exists(file_path):
@@ -673,9 +787,9 @@ def delete_resume(resume_id: int):
             except: pass 
         db.delete(resume)
         db.commit()
-        if hasattr(resume_index, 'remove'):
-            try: resume_index.remove(resume_id)
-            except: pass
+        resume_index.remove(resume_id)
+        resume_index.schedule_save()
+        invalidate_stats_cache()
         return {"message": "Successfully deleted profile", "id": resume_id}
     finally: db.close()
 
@@ -687,8 +801,8 @@ def export_csv(ids: str = Query("")):
         output = io.StringIO()
         writer = csv.writer(output)
         writer.writerow(["Rank", "Name", "Email", "Phone", "Location", "Experience Years", "Skills", "ATS Score"])
-        for rank, r in enumerate(sorted(resumes, key=lambda r: -r.score), 1):
-            writer.writerow([rank, r.name, r.email, r.phone, r.location, r.experience_years, "; ".join(json.loads(r.skills) if r.skills else []), round(r.score)])
+        for rank, r in enumerate(sorted(resumes, key=lambda r: -(r.score or 0)), 1):
+            writer.writerow([rank, r.name, r.email, r.phone, r.location, r.experience_years, "; ".join(json.loads(r.skills) if r.skills else []), round(r.score or 0)])
         output.seek(0)
         return StreamingResponse(iter([output.getvalue()]), media_type="text/csv", headers={"Content-Disposition": "attachment; filename=candidates_export.csv"})
     finally: db.close()
@@ -706,7 +820,10 @@ def delete_batch(req: DeleteBatchRequest):
                 try: os.remove(file_path)
                 except: pass
             db.delete(r)
+            resume_index.remove(r.id)
         db.commit()
+        resume_index.schedule_save()
+        invalidate_stats_cache()
         return {"message": f"Successfully deleted {len(resumes)} profiles."}
     finally: db.close()
 
@@ -714,14 +831,15 @@ def delete_batch(req: DeleteBatchRequest):
 def delete_all():
     db = SessionLocal()
     try:
-        resumes = db.query(Resume).all()
-        for r in resumes:
-            file_path = os.path.join(RESUME_DIR, r.filename)
+        for (filename,) in db.query(Resume.filename).all():
+            file_path = os.path.join(RESUME_DIR, filename)
             if os.path.exists(file_path):
                 try: os.remove(file_path)
                 except: pass
         db.query(Resume).delete()
         db.commit()
+        resume_index.rebuild([])  # SQLite reuses ids after a wipe; stale vectors would map to new resumes
+        invalidate_stats_cache()
         return {"message": "NUCLEAR WIPE COMPLETE. Database is now empty."}
     finally: db.close()
 
@@ -730,4 +848,4 @@ def root(): return {"status": "ok"}
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=7860)
+    uvicorn.run(app, host="0.0.0.0", port=int(os.environ.get("PORT", 7860)))

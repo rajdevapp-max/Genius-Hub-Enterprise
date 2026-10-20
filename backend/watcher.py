@@ -34,6 +34,31 @@ class ResumeHandler(FileSystemEventHandler):
             finally:
                 stats["processing"] = False
 
+    def on_moved(self, event):
+        # Browsers/uploaders often write to a temp name then rename into place.
+        if event.is_directory: return
+        if os.path.dirname(os.path.abspath(event.dest_path)) == os.path.abspath(RESUME_DIR):
+            self.on_created(type("Evt", (), {"is_directory": False, "src_path": event.dest_path})())
+
+    def on_deleted(self, event):
+        if event.is_directory: return
+        filename = os.path.basename(event.src_path)
+        db = SessionLocal()
+        try:
+            resume = db.query(Resume).filter(Resume.filename == filename).first()
+            if resume:
+                from embedder import resume_index
+                resume_index.remove(resume.id)
+                resume_index.schedule_save()
+                db.delete(resume)
+                db.commit()
+                stats["last_event"] = f"Removed: {filename}"
+        except Exception as e:
+            db.rollback()
+            print(f"[watcher] delete sync failed for {filename}: {e}", flush=True)
+        finally:
+            db.close()
+
 def sync_existing_files():
     """Ultra-fast DB diffing. Solves the 1M+ resume restart delay."""
     print(f"\n[sync] Scanning {RESUME_DIR} directory...")

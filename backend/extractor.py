@@ -13,7 +13,7 @@ import json
 from database import SessionLocal, Resume
 from parser import extract_full, calculate_visual_score, extract_certificates
 from classifier import classify_resume
-from embedder import resume_index
+from embedder import resume_index, build_embedding_text
 
 def process_resume(file_path: str) -> dict:
     print(f"👉 Extracting: {os.path.basename(file_path)}", flush=True)
@@ -54,6 +54,7 @@ def process_resume(file_path: str) -> dict:
             has_image=parsed_data.get("has_image", False),
             page_count=parsed_data.get("page_count", 1),
             word_count=parsed_data.get("word_count", 0),
+            file_hash=parsed_data.get("file_hash", ""),
             fraud_flag=parsed_data.get("fraud_flag", 0),
             fraud_reason=parsed_data.get("fraud_reason", ""),
             impact_score=ai_data.get("impact_score", 0.0),
@@ -64,13 +65,14 @@ def process_resume(file_path: str) -> dict:
         db.commit()
         db.refresh(resume)
 
-        embedding_text = f"{ai_data['name']} {ai_data['location']} {' '.join(ai_data['skills'])} {raw_text[:1000]}"
-        if hasattr(resume_index, 'add'):
-            resume_index.add(resume.id, embedding_text, {})
+        embedding_text = build_embedding_text(ai_data['name'], ai_data['location'], ai_data['skills'], raw_text)
+        resume_index.add(resume.id, embedding_text, {})
+        resume_index.schedule_save()
 
         return {"message": "Success", "id": resume.id, "name": resume.name}
     
     except Exception as e:
+        db.rollback()
         print(f"\n[BYPASSED] Skipped {os.path.basename(file_path)}: {str(e)}", flush=True)
         return {"error": str(e)}
     finally:

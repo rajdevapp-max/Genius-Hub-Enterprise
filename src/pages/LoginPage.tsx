@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { api, AUTH_KEY } from '@/lib/api';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Lock, User, ArrowRight, ShieldCheck, Zap, Target, BrainCircuit, Loader2, ExternalLink } from 'lucide-react';
@@ -10,43 +11,20 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
-  const DEMO_ID = 'BATS-DEMO';
-  const DEMO_PASS = 'GeniusHub2026';
-
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setLoading(true);
-
-    await new Promise(resolve => setTimeout(resolve, 1200));
-
-    if (username === DEMO_ID && password === DEMO_PASS) {
-      sessionStorage.setItem('bats_demo_auth', 'true');
+    try {
+      const { token, username: user } = await api.login(username.trim(), password);
+      sessionStorage.setItem(AUTH_KEY, token);
       sessionStorage.setItem('bats_login_time', Date.now().toString());
-      sessionStorage.setItem('bats_login_id', username);
-      
-      try {
-        fetch('https://discord.com/api/webhooks/1488185677211238430/FKx2kBLSNK6Xyu1kVUT8MLDcPovQnKdiLb2ztl2bB0cLa35yJXPNB1fVid5-5CYWwcSp', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            content: "🚨 **BATS Alert:** A user just accessed the GeniusHub Enterprise Demo!",
-            embeds: [{
-              title: "User Session Started",
-              color: 3447003,
-              fields: [
-                { name: "Time (Local)", value: new Date().toLocaleString(), inline: true },
-                { name: "Access ID Used", value: username, inline: true }
-              ],
-              footer: { text: "BATS Telemetry System" }
-            }]
-          })
-        });
-      } catch (err) {}
-      
-      navigate('/?demo=demo-BATS');
-    } else {
-      setError('Invalid Access ID or Secure Password. Please contact BATS support.');
+      sessionStorage.setItem('bats_login_id', user);
+      navigate('/');
+    } catch (err) {
+      setError(err instanceof Error && err.message === 'invalid'
+        ? 'Invalid Access ID or Secure Password.'
+        : 'Server is waking up or unreachable. Please try again in a few seconds.');
       setLoading(false);
     }
   };

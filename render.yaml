@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: geniushub-client-api
+    runtime: python
+    rootDir: backend
+    plan: free
+    branch: client-demo
+    buildCommand: pip install -r requirements-render.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.10.14
+      - key: CLOUD_SYNC
+        value: "0"
+      - key: APP_USERNAME
+        sync: false
+      - key: APP_PASSWORD
+        sync: false
+      - key: AUTH_SECRET
+        generateValue: true

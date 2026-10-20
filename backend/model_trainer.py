@@ -9,7 +9,7 @@ import time
 import threading
 from sklearn.feature_extraction.text import TfidfVectorizer
 from database import SessionLocal, Resume
-from classifier import SKILL_PATTERNS
+from classifier import SKILL_PATTERNS, is_valid_learned_skill
 
 DYNAMIC_SKILLS_FILE = "dynamic_skills.json"
 
@@ -53,7 +53,7 @@ def train_ml_model():
         ignore_words = {"using", "worked", "application", "development", "developer", "engineer", "team", "project", "data", "software", "experience", "business", "design", "management", "testing", "technical", "system", "systems", "client", "clients"}
         
         for word, score in word_scores[:500]: 
-            if len(word) > 2 and word not in existing_skills and not any(ig in word for ig in ignore_words):
+            if word not in existing_skills and is_valid_learned_skill(word) and not any(ig in word.split() for ig in ignore_words) and all(is_valid_learned_skill(p) for p in word.split()):
                 formatted_word = word.title() if len(word) > 3 else word.upper()
                 new_discoveries.append(formatted_word)
                 if len(new_discoveries) >= 50:
@@ -78,4 +78,6 @@ def start_ml_cron():
 
     thread = threading.Thread(target=cron_loop, daemon=True)
     thread.start()
-    threading.Timer(60.0, train_ml_model).start() # Initial run 60 seconds after server boot
+    first_run = threading.Timer(60.0, train_ml_model) # Initial run 60 seconds after server boot
+    first_run.daemon = True
+    first_run.start()

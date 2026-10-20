@@ -14,17 +14,15 @@ import AnalyticsPage from "@/pages/AnalyticsPage";
 import UploadPage from "@/pages/UploadPage";
 import LoginPage from "@/pages/LoginPage";
 import DatabasePage from "@/pages/DatabasePage"; 
-import NotFound from "@/pages/NotFound"; // Fixed path to match others
+import NotFound from "@/pages/NotFound";
+import { getToken } from "@/lib/api"; // Fixed path to match others
 
 const queryClient = new QueryClient();
 
 // --- THE SMART LOCK SECURITY WRAPPER ---
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
-  const isDemoSite = window.location.search.includes("demo=demo-BATS");
-  const isAuthenticated = sessionStorage.getItem('bats_demo_auth') === 'true';
-  
-  if (isDemoSite && !isAuthenticated) {
-    return <Navigate to={`/login${window.location.search}`} replace />;
+  if (!getToken()) {
+    return <Navigate to="/login" replace />;
   }
   
   return <>{children}</>;

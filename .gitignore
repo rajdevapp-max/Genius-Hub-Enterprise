@@ -9,3 +9,7 @@ sync.py
 backend/resumes/
 backend/resumes.db
 backend/faiss_index/
+backend/faiss_index.bin
+backend/faiss_meta.json
+backend/resumes.db-*
+dist/

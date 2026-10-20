@@ -11,13 +11,8 @@ faiss-cpu==1.8.0
 requests==2.32.0
 numpy==1.26.4
 watchdog==4.0.0
-spacy==3.7.5
 pdfplumber==0.11.0
 python-dotenv==1.0.1
 huggingface_hub
-pdfplumber
-pytesseract
-playwright
-pandas
-openpyxl
-python-multipart
+scikit-learn
+tqdm

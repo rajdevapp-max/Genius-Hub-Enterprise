@@ -3,25 +3,30 @@
 
 import type { SearchRequest, SearchResponse, JDMatchRequest, JDMatchResponse, StatsResponse, UploadResponse, LiveStatus, Candidate } from './types';
 
-// --- STRICT ROUTING LOGIC ---
-const params = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : new URLSearchParams();
-const demoBackend = params.get('demo');
+const API_URL = (import.meta.env.VITE_API_URL || 'http://localhost:8000').replace(/\/$/, '');
 
-// Hugging Face URLs require lowercase subdomains
-const safeDemoName = demoBackend ? demoBackend.toLowerCase() : null;
+export const AUTH_KEY = 'gh_auth_token';
+export const getToken = () => sessionStorage.getItem(AUTH_KEY) || '';
+const authHeaders = (): Record<string, string> => (getToken() ? { Authorization: `Bearer ${getToken()}` } : {});
+const withToken = (url: string) => `${url}${url.includes('?') ? '&' : '?'}token=${encodeURIComponent(getToken())}`;
 
-// If '?demo=' exists, use the Demo space. Otherwise, force the Original 37K space!
-const API_URL = safeDemoName 
-  ? `https://vinu019-${safeDemoName}.hf.space` 
-  : (import.meta.env.VITE_API_URL || 'https://vinu019-resume-backend.hf.space');
+const handleAuthFailure = (res: Response) => {
+  if (res.status === 401 && !window.location.pathname.startsWith('/login')) {
+    sessionStorage.removeItem(AUTH_KEY);
+    window.location.href = '/login';
+  }
+};
 
 const apiFetch = async <T>(endpoint: string, options?: RequestInit): Promise<T> => {
   const res = await fetch(`${API_URL}${endpoint}`, {
+    ...options,
     headers: {
       'Content-Type': 'application/json',
+      ...authHeaders(),
+      ...(options?.headers || {}),
     },
-    ...options,
   });
+  handleAuthFailure(res);
   if (!res.ok) throw new Error(`API Error: ${res.status} ${res.statusText}`);
   return res.json();
 };
@@ -54,6 +59,16 @@ export interface ExpandedSearchResponse extends SearchResponse {
 }
 
 export const api = {
+  login: async (username: string, password: string): Promise<{ token: string; username: string }> => {
+    const res = await fetch(`${API_URL}/api/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password }),
+    });
+    if (!res.ok) throw new Error(res.status === 401 ? 'invalid' : `Login failed: ${res.status}`);
+    return res.json();
+  },
+
   search: (data: ExpandedSearchRequest) =>
     apiFetch<ExpandedSearchResponse>('/api/search', {
       method: 'POST',
@@ -101,7 +116,8 @@ export const api = {
   uploadResume: async (file: File): Promise<UploadResponse> => {
     const formData = new FormData();
     formData.append('file', file);
-    const res = await fetch(`${API_URL}/api/upload`, { method: 'POST', body: formData });
+    const res = await fetch(`${API_URL}/api/upload`, { method: 'POST', body: formData, headers: authHeaders() });
+    handleAuthFailure(res);
     if (!res.ok) throw new Error(`Upload failed: ${res.status}`);
     return res.json();
   },
@@ -109,7 +125,8 @@ export const api = {
   uploadBatch: async (files: File[]): Promise<{ message: string; results: any[] }> => {
     const formData = new FormData();
     files.forEach(f => formData.append('files', f));
-    const res = await fetch(`${API_URL}/api/upload-batch`, { method: 'POST', body: formData });
+    const res = await fetch(`${API_URL}/api/upload-batch`, { method: 'POST', body: formData, headers: authHeaders() });
+    handleAuthFailure(res);
     if (!res.ok) throw new Error(`Batch upload failed: ${res.status}`);
     return res.json();
   },
@@ -123,7 +140,7 @@ export const api = {
   deleteBatchResumes: async (ids: number[]) => {
     const res = await fetch(`${API_URL}/api/candidates/delete-batch`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
       body: JSON.stringify({ ids })
     });
     if (!res.ok) throw new Error('Failed to delete batch');
@@ -131,14 +148,14 @@ export const api = {
   },
 
   deleteAllResumes: async () => {
-    const res = await fetch(`${API_URL}/api/candidates/delete-all`, { method: 'POST' });
+    const res = await fetch(`${API_URL}/api/candidates/delete-all`, { method: 'POST', headers: authHeaders() });
     if (!res.ok) throw new Error('Failed to wipe database');
     return res.json();
   },
 
   exportCSV: (ids?: number[]) =>
-    `${API_URL}/api/export${ids?.length ? `?ids=${ids.join(',')}` : ''}`,
+    withToken(`${API_URL}/api/export${ids?.length ? `?ids=${ids.join(',')}` : ''}`),
 
   downloadResume: (filename: string) =>
-    `${API_URL}/api/resumes/${encodeURIComponent(filename)}`,
+    withToken(`${API_URL}/api/resumes/${encodeURIComponent(filename)}`),
 };

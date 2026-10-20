@@ -1,8 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Search, FileText, BarChart3, Upload, Menu, X, LogOut, Database } from 'lucide-react'; // 🎯 Added Database icon
 import { motion, AnimatePresence } from 'framer-motion';
 import { ThemeToggle, useTheme } from '@/components/ThemeToggle';
+import { AUTH_KEY } from '@/lib/api';
 
 // 🎯 THE FIX: Added the Database tab right here!
 const navItems = [
@@ -19,37 +20,14 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const [collapsed, setCollapsed] = useState(false);
   const { theme, toggle } = useTheme();
 
-  // 🔐 Check if we are on the demo site using the secret key
-  const isDemoSite = window.location.search.includes("demo=demo-BATS");
+  // Client build: every session is authenticated, so always show the logout control.
+  const isDemoSite = true;
 
-  // 🚨 TAB CLOSE TRACKER 🚨
-  useEffect(() => {
-    // If it's your original model, don't even run the tracker!
-    if (!isDemoSite) return;
-
-    const handleTabClose = () => {
-      const isAuth = sessionStorage.getItem('bats_demo_auth');
-      if (isAuth === 'true') {
-        api.deleteAllResumes().catch(console.error);
-      }
-    };
-
-    window.addEventListener('unload', handleTabClose);
-    return () => window.removeEventListener('unload', handleTabClose);
-  }, [isDemoSite]);
-
-  const handleLogout = async () => {
-    if (window.confirm("Are you sure you want to logout? All demo data will be permanently wiped.")) {
-      try {
-        await api.deleteAllResumes();
-      } catch (e) {
-        console.error("Wipe failed during logout", e);
-      }
-      sessionStorage.removeItem('bats_demo_auth');
-      sessionStorage.removeItem('bats_login_time');
-      sessionStorage.removeItem('bats_login_id');
-      navigate(`/login${window.location.search}`);
-    }
+  const handleLogout = () => {
+    sessionStorage.removeItem(AUTH_KEY);
+    sessionStorage.removeItem('bats_login_time');
+    sessionStorage.removeItem('bats_login_id');
+    navigate('/login');
   };
 
   return (

@@ -59,13 +59,34 @@ SKILL_PATTERNS = [
 
 # 🎯 NEW: ML Engine Dynamic Skill Ingestion
 DYNAMIC_SKILLS_FILE = "dynamic_skills.json"
+
+# Words TF-IDF ranks highly in resumes that are not skills. Learned terms in this set are never tagged.
+GENERIC_RESUME_WORDS = {
+    "developed", "used", "using", "like", "https", "http", "www", "com", "end", "test", "support", "implemented",
+    "user", "users", "code", "service", "services", "analysis", "performance", "infrastructure", "solutions",
+    "solution", "created", "based", "customer", "customers", "issues", "process", "processes", "environment",
+    "technologies", "technology", "various", "including", "product", "products", "requirements", "knowledge",
+    "integration", "linkedin", "github", "configuration", "deployment", "india", "usa", "managed", "servers",
+    "server", "monitoring", "sales", "time", "university", "college", "school", "web", "net", "network",
+    "security", "work", "working", "worked", "team", "teams", "project", "projects", "data", "software",
+    "experience", "business", "design", "management", "testing", "technical", "system", "systems", "client",
+    "clients", "application", "applications", "development", "developer", "engineer", "engineering", "new",
+    "responsible", "responsibilities", "skills", "tools", "year", "years", "company", "role", "roles",
+    "provided", "ensure", "ensured", "maintained", "built", "worked", "involved", "good", "strong", "ability",
+    "best", "high", "level", "quality", "support", "report", "reports", "reporting", "operations", "manager",
+    "email", "phone", "address", "summary", "objective", "profile", "education", "present", "current",
+}
+
+def is_valid_learned_skill(word: str) -> bool:
+    w = word.strip().lower()
+    return len(w) > 2 and w not in GENERIC_RESUME_WORDS and not w.isdigit() and not w.startswith("http")
+
 DYNAMIC_SKILLS = []
 if os.path.exists(DYNAMIC_SKILLS_FILE):
     try:
         with open(DYNAMIC_SKILLS_FILE, "r") as f:
-            DYNAMIC_SKILLS = json.load(f)
-            DYNAMIC_SKILLS = [s.lower() for s in DYNAMIC_SKILLS]
-    except:
+            DYNAMIC_SKILLS = [s.lower() for s in json.load(f) if is_valid_learned_skill(s)]
+    except Exception:
         pass
 
 # 🎯 NEW: Unified Dictionary (Human + ML AI)
@@ -130,12 +151,34 @@ def extract_impact_metrics(text: str) -> float:
     impact_score += len(matches) * 5.0
     return min(impact_score, 25.0)
 
+def skill_regex(skill: str) -> str:
+    """Boundary-safe pattern: regex word boundaries fail next to symbols, so 'c++', 'c#', '.net' never matched before."""
+    return r'(?<![a-z0-9+#])' + re.escape(skill.lower()) + r'(?![a-z0-9+#])'
+
+# Single-letter / common-word skills only count when written as a proper noun in the original text.
+CASE_SENSITIVE_SKILLS = {
+    "c": re.compile(r'(?<![\w+#.\-/])C(?![\w+#.\-/&])'),
+    "go": re.compile(r'[Gg]olang|GoLang|(?<![\w-])(?:Go|GO)(?![\w-])(?!\s+(?:to|ahead|live|back|through|beyond)\b)'),
+    "js": re.compile(r'(?<![\w.])JS(?![\w])'),
+    "snow": re.compile(r'(?<![\w])SNOW(?![\w])'),
+    "less": re.compile(r'(?<![\w])LESS(?![\w])'),
+    "underscore": re.compile(r'Underscore(?:\.js)?'),
+}
+_SKILL_REGEXES = None
+
+def _compiled_skills():
+    global _SKILL_REGEXES
+    if _SKILL_REGEXES is None:
+        _SKILL_REGEXES = [(sk, CASE_SENSITIVE_SKILLS.get(sk), re.compile(skill_regex(sk))) for sk in dict.fromkeys(ACTIVE_SKILL_PATTERNS)]
+    return _SKILL_REGEXES
+
 def extract_skills_regex(text: str) -> list[str]:
     text_lower = text.lower()
     found = []
     # 🎯 NEW: Scans using the Unified Dictionary (Human + ML)
-    for skill in ACTIVE_SKILL_PATTERNS:
-        if re.search(r'\b' + re.escape(skill) + r'\b', text_lower):
+    for skill, cs_pat, pat in _compiled_skills():
+        hit = cs_pat.search(text) if cs_pat is not None else pat.search(text_lower)
+        if hit:
             found.append(skill.title() if len(skill) > 3 else skill.upper())
     return found
 
@@ -161,8 +204,10 @@ def extract_email(text: str) -> str:
     return match.group(0) if match else ""
 
 def extract_phone(text: str) -> str:
-    match = re.search(r'(?:\+?\d{1,3}[-\s]?)?\(?\d{3}\)?[-\s]?\d{3}[-\s]?\d{4}', text)
-    return match.group(0) if match else ""
+    match = re.search(r'(?:\+?\d{1,3}[-\s]?)?\(?\d{3}\)?[-\s.]?\d{3}[-\s.]?\d{4}(?!\d)', text)
+    if not match:  # Indian style: +91 98765 43210 / 98765-43210
+        match = re.search(r'(?:\+?91[-\s]?)?[6-9]\d{4}[-\s]?\d{5}(?!\d)', text)
+    return match.group(0).strip() if match else ""
 
 def extract_name(text: str, filename: str = "", email: str = "") -> str:
     candidates = {}
@@ -259,11 +304,36 @@ def extract_location(text: str, phone: str = "") -> str:
     
     return ""
 
+EDU_PATTERNS = [
+    (r"\bph\.?\s?d\b|\bdoctorate\b|\bdoctor of philosophy\b", "PhD"),
+    (r"\bm\.?\s?tech\b", "M.Tech"),
+    (r"\bm\.?b\.?a\b", "MBA"),
+    (r"\bm\.?\s?sc\b", "MSc"),
+    (r"\bmaster(?:'?s)?\s+(?:of|in|degree)\b|\bmasters\b|\bm\.s\.?(?=\s|,|$)|\bms\s+(?:in|of)\b|\bm\.?c\.?a\b", "Masters"),
+    (r"\bm\.e\.?(?=\s|,|$)", "ME"),
+    (r"\bb\.?\s?tech\b", "B.Tech"),
+    (r"\bb\.e\.?(?=\s|,|$)|\bbachelor of engineering\b", "BE"),
+    (r"\bb\.?\s?sc\b", "BSc"),
+    (r"\bb\.?\s?com\b", "BCom"),
+    (r"\bb\.?b\.?a\b", "BBA"),
+    (r"\bb\.?c\.?a\b", "BCA"),
+    (r"\bbachelor(?:'?s)?\b|\bb\.s\.?(?=\s|,|$)|\bb\.a\.?(?=\s|,|$)", "Bachelors"),
+    (r"\bdiploma\b", "Diploma"),
+    (r"\bassociate(?:'?s)?\s+(?:of|in|degree)\b", "Associate"),
+]
+_EDU_REGEXES = [(re.compile(p, re.IGNORECASE), label) for p, label in EDU_PATTERNS]
+
 def extract_education(text: str) -> str:
-    edu_keywords = [("Ph.D", "PhD"), ("Doctorate", "PhD"), ("Master", "Masters"), ("M.Tech", "M.Tech"), ("M.S.", "MS"), ("MBA", "MBA"), ("M.Sc", "MSc"), ("M.E.", "ME"), ("Bachelor", "Bachelors"), ("B.Tech", "B.Tech"), ("B.E.", "BE"), ("B.S.", "BS"), ("B.Sc", "BSc"), ("B.Com", "BCom"), ("BBA", "BBA"), ("BCA", "BCA"), ("Diploma", "Diploma"), ("Associate", "Associate")]
-    for keyword, label in edu_keywords:
-        if keyword.lower() in text.lower(): return label
+    # Highest degree first. Requires degree-like phrasing so "Scrum Master" / "Associate Engineer" don't count.
+    for pat, label in _EDU_REGEXES:
+        if pat.search(text): return label
     return ""
+
+DATE_RANGE_RE = re.compile(
+    r'\b((?:19|20)\d{2})\s*(?:[-–—−·•|~]|to|till|until)\s*(?:[a-z]{3,9}\.?,?\s*|\d{1,2}\s*[/.\-]\s*)?((?:19|20)\d{2}|present|current|now|date|today|ongoing)\b',
+    re.IGNORECASE)
+EDU_CONTEXT_RE = re.compile(r'\b(?:university|college|school|institute|b\.?\s?tech|m\.?\s?tech|bachelor|master|degree|cgpa|gpa|graduat|b\.?sc|m\.?sc|hsc|ssc|class\s+(?:x|xii|10|12))', re.IGNORECASE)
+WORK_CONTEXT_RE = re.compile(r'\b(?:engineer|developer|analyst|intern|manager|consultant|lead|architect|pvt|ltd|inc\b|llc|technologies|solutions|corp)', re.IGNORECASE)
 
 def analyze_experience(text: str) -> dict:
     fallback_exp = 0.0
@@ -275,7 +345,15 @@ def analyze_experience(text: str) -> dict:
             break
 
     current_year = datetime.datetime.now().year
-    date_ranges = re.findall(r'\b((?:19|20)\d{2})\s*(?:[-–]|to)\s*((?:19|20)\d{2}|present|current|now)\b', text, re.IGNORECASE)
+    # Handles "2019 - 2022", "Jan 2019 – Mar 2022", "01/2019 - 03/2022", "2019 to Present"; skips education lines.
+    date_ranges = []
+    for m in DATE_RANGE_RE.finditer(text):
+        line_start = text.rfind("\n", 0, m.start()) + 1
+        line_end = text.find("\n", m.end())
+        line = text[line_start:line_end if line_end != -1 else len(text)]
+        if EDU_CONTEXT_RE.search(line) and not WORK_CONTEXT_RE.search(line):
+            continue
+        date_ranges.append((m.group(1), m.group(2)))
     
     if not date_ranges:
         return {"total_experience": fallback_exp, "relevant_experience": fallback_exp, "total_gap_years": 0.0}
@@ -284,7 +362,7 @@ def analyze_experience(text: str) -> dict:
     for start, end in date_ranges:
         try:
             s = int(start)
-            e = current_year if end.lower() in ("present", "current", "now") else int(end)
+            e = current_year if not end.isdigit() else int(end)
             if 1980 <= s <= current_year and s <= e <= current_year + 1:
                 intervals.append([s, e])
         except: pass
@@ -327,6 +405,7 @@ def classify_resume(text: str, filename: str = "") -> dict:
     summary = generate_summary(text)
     impact_score = extract_impact_metrics(text)
     exp_data = analyze_experience(text)
+    phone = extract_phone(text)
     
     text_lower = text.lower()
     claims_full_stack = "full stack" in text_lower or "fullstack" in text_lower
@@ -342,8 +421,8 @@ def classify_resume(text: str, filename: str = "") -> dict:
     return {
         "name": name,
         "email": email,
-        "phone": extract_phone(text),
-        "location": extract_location(text, extract_phone(text)),
+        "phone": phone,
+        "location": extract_location(text, phone),
         "education": extract_education(text),
         "experience_years": exp_data["total_experience"],
         "relevant_experience_years": exp_data["relevant_experience"],
